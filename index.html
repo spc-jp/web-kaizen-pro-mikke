@@ -500,6 +500,7 @@
                 コンバージョン数
               </span>
               <span class="text-xl md:text-2xl font-black text-[#223670] mt-1.5"><span id="metric-cv">84</span> <span class="text-xs font-bold text-slate-400">件</span></span>
+              <span id="delta-cv" class="text-[10px] font-black mt-1 leading-tight"></span>
             </div>
 
             <!-- 流入元 -->
@@ -518,6 +519,7 @@
                 スマホ利用率
               </span>
               <span class="text-xl md:text-2xl font-black text-[#223670] mt-1.5"><span id="metric-mobile">76.8</span> <span class="text-xs font-bold text-slate-400">%</span></span>
+              <span id="delta-mobile" class="text-[10px] font-black mt-1 leading-tight"></span>
             </div>
 
             <!-- 🔒 エンゲージメント率の隠し受け皿（AIレポート本文に連動。画面には出さず値だけ保持） -->
@@ -597,6 +599,62 @@
     let loadedJson = null;
     let fetchedDataCache = null; // 本物のWorkersから取得したデータの保存用
     let deviceChartInstance = null; // デバイス割合のChartインスタンス
+    let prevData = null; // 前月の数値（Workersまたはデモの先月データを保持）
+
+    // 📊 前月比の文言を組み立てる（例: 先月72件 → +12件 ↑）
+    function fmtDelta(cur, prev, unit) {
+      const c = parseFloat(cur), p = parseFloat(prev);
+      if (isNaN(c) || isNaN(p)) return "";
+      const diff = Number((c - p).toFixed(1));
+      let arrow = "→", color = "text-slate-400";
+      if (diff > 0) { arrow = "↑"; color = "text-emerald-600"; }
+      else if (diff < 0) { arrow = "↓"; color = "text-rose-500"; }
+      const sign = diff > 0 ? "+" : "";
+      return `<span class="${color}">先月${p}${unit} → ${sign}${diff}${unit} ${arrow}</span>`;
+    }
+
+    // 📊 ダッシュボードのカードに前月比を反映
+    function updateDeltas() {
+      if (!prevData) return;
+      const cvEl = document.getElementById('metric-cv');
+      const mobEl = document.getElementById('metric-mobile');
+      const dCv = document.getElementById('delta-cv');
+      const dMob = document.getElementById('delta-mobile');
+      if (dCv && cvEl) dCv.innerHTML = fmtDelta(cvEl.innerText, prevData.cv, "件");
+      if (dMob && mobEl) dMob.innerHTML = fmtDelta(mobEl.innerText, prevData.mobile, "%");
+    }
+
+    // 📄 PRO版（Gemini本文）を【見出し】ごとの美しいカードに整形して表示
+    function renderMonthlyReport(rawText) {
+      const text = (rawText || "").trim();
+      const iconFor = (title) => {
+        if (title.includes("結論")) return "flag";
+        if (title.includes("数字") || title.includes("変化")) return "bar-chart-3";
+        if (title.includes("一手") || title.includes("提案")) return "target";
+        if (title.includes("松本") || title.includes("応援")) return "sparkles";
+        return "chevron-right";
+      };
+      const parts = text.split(/【/).filter(s => s.trim() !== "");
+      let cards = "";
+      for (const p of parts) {
+        const idx = p.indexOf("】");
+        if (idx === -1) continue;
+        const title = p.slice(0, idx).trim();
+        const bodyHtml = p.slice(idx + 1).trim().replace(/\n/g, '<br>');
+        cards += `
+          <div class="bg-slate-50/60 p-4 rounded-2xl border border-slate-100">
+            <h4 class="text-[#223670] font-black flex items-center gap-1.5 text-[13px] mb-1.5">
+              <i data-lucide="${iconFor(title)}" class="w-4 h-4 text-[#00a3e0]"></i>
+              ${title}
+            </h4>
+            <p class="text-[11px] text-slate-600 leading-relaxed pl-1 font-bold">${bodyHtml}</p>
+          </div>`;
+      }
+      if (!cards) {
+        cards = `<p class="text-[11px] text-slate-600 leading-relaxed font-bold">${text.replace(/\n/g, '<br>')}</p>`;
+      }
+      return `<div class="space-y-3">${cards}</div>`;
+    }
 
     // 🛡️ 堅牢なDOM操作・Null安全ガードヘルパー関数群
     function safeGetValue(id, defaultValue = "") {
@@ -1049,6 +1107,15 @@
           safeSetText('metric-mobile', resultData.mobileRatio || 0.0);
           safeSetText('metric-engagement', resultData.engagementRate || 0.0);
 
+          // 前月比データをセットしてカードに反映
+          const prev = resultData.prev || {};
+          prevData = {
+            cv: prev.cv != null ? prev.cv : 0,
+            mobile: prev.mobileRatio != null ? prev.mobileRatio : 0,
+            engagement: prev.engagementRate != null ? prev.engagementRate : 0
+          };
+          updateDeltas();
+
           // 本物の数値に基づいて円グラフをアニメーション更新！
           updateDeviceChart(resultData.mobileRatio || 76.8);
 
@@ -1076,6 +1143,10 @@
         safeSetText('metric-source', "Organic Search");
         safeSetText('metric-mobile', "76.8");
         safeSetText('metric-engagement', "68.2");
+
+        // デモ用の前月データをセットして前月比を表示
+        prevData = { cv: 72, mobile: 74.2, engagement: 65.0 };
+        updateDeltas();
 
         // シミュレーション円グラフ描画
         updateDeviceChart(76.8);
@@ -1131,13 +1202,8 @@
 
         // もし本物のWorkersから本物Geminiのレスポンスが届いている場合はそれを採用
         if (fetchedDataCache && fetchedDataCache.ai_analysis) {
-          const formattedAnalysis = fetchedDataCache.ai_analysis.replace(/\n/g, '<br>');
           if (reportArea) {
-            reportArea.innerHTML = `
-              <div class="prose max-w-none text-slate-700 text-[11px] leading-relaxed font-bold">
-                ${formattedAnalysis}
-              </div>
-            `;
+            reportArea.innerHTML = renderMonthlyReport(fetchedDataCache.ai_analysis);
           }
         } else {
           // デモまたはWorkers未同期時の高精度コンサルシミュレーション (Null安全値取得に全面書き換え！)
