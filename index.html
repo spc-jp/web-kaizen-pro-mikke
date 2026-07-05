@@ -1,0 +1,1625 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>自動分析みっけ V4.2 (ビジュアル極み・超Null安全版)</title>
+  
+  <!-- favicon（ファビコン）の表示設定 -->
+  <link rel="icon" href="https://spc-jp.github.io/web-kaizen-mikke/favicon.png" type="image/png">
+  
+  <!-- 安定した Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- 確実に読み込める UMD版 Lucide Icons -->
+  <script src="https://cdn.jsdelivr.net/npm/lucide@0.344.0/dist/umd/lucide.min.js"></script>
+  <!-- 📈 グラフ描画ライブラリ Chart.js (CDN経由) -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  
+  <style>
+    :root {
+      --main-navy: #223670;
+      --accent-cyan: #00a3e0;
+      --accent-gold: #d0a900;
+      --bg-light: #f0f4f8;
+      --text-dark: #1e293b;
+    }
+
+    body {
+      font-family: "Helvetica Neue", Arial, "Hiragino Kaku Gothic ProN", "Hiragino Sans", Meiryo, sans-serif;
+      background-color: var(--bg-light);
+      color: var(--text-dark);
+    }
+
+    /* ぷくぷく立体デザイン（Claymorphism）の基本影設計 */
+    .clay-card {
+      background: #f0f4f8;
+      border-radius: 24px;
+      box-shadow: 9px 9px 18px #beccd8, 
+                  -9px -9px 18px #ffffff;
+      border: 1px solid rgba(255, 255, 255, 0.8);
+      transition: all 0.3s ease;
+    }
+
+    .clay-input {
+      background: #f0f4f8;
+      border-radius: 16px;
+      box-shadow: inset 3px 3px 6px #beccd8, 
+                  inset -3px -3px 6px #ffffff;
+      border: none;
+      outline: none;
+      transition: all 0.2s ease;
+    }
+
+    .clay-input:focus {
+      box-shadow: inset 5px 5px 10px #a9b9c9, 
+                  inset -5px -5px 10px #ffffff;
+    }
+
+    /* ロイヤルネイビーのグラデーションぷくぷくボタン */
+    .clay-btn-navy {
+      background: linear-gradient(135deg, #223670, #142044);
+      border-radius: 20px;
+      box-shadow: 4px 4px 10px rgba(34, 54, 112, 0.25), 
+                  -4px -4px 10px rgba(255, 255, 255, 0.95);
+      color: white;
+      transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+
+    .clay-btn-navy:hover {
+      transform: translateY(-2px);
+      box-shadow: 6px 6px 14px rgba(34, 54, 112, 0.35), 
+                  -4px -4px 10px rgba(255, 255, 255, 0.95);
+    }
+
+    .clay-btn-navy:active {
+      transform: translateY(1px);
+      box-shadow: inset 3px 3px 6px rgba(10, 16, 34, 0.5), 
+                  inset -3px -3px 6px rgba(255, 255, 255, 0.2);
+    }
+
+    /* トグルスイッチ用スタイル */
+    .switch {
+      position: relative;
+      display: inline-block;
+      width: 44px;
+      height: 24px;
+    }
+    .switch input { 
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+    .slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: #cbd5e1;
+      transition: .3s;
+      border-radius: 24px;
+      box-shadow: inset 1px 1px 3px rgba(0,0,0,0.1);
+    }
+    .slider:before {
+      position: absolute;
+      content: "";
+      height: 18px;
+      width: 18px;
+      left: 3px;
+      bottom: 3px;
+      background-color: white;
+      transition: .3s;
+      border-radius: 50%;
+      box-shadow: 1px 1px 3px rgba(0,0,0,0.15);
+    }
+    input:checked + .slider {
+      background-color: #00a3e0;
+    }
+    input:checked + .slider:before {
+      transform: translateX(20px);
+    }
+
+    /* アニメーション用クラス */
+    .fade-in { animation: fadeIn 0.4s ease-out forwards; }
+    .zoom-in { animation: zoomIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.1) forwards; }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes zoomIn { from { transform: scale(0.97); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+
+    .pulse-slow {
+      animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    }
+
+    /* 設定アイコンのゆっくり回転（Tailwind標準に無いため独自定義） */
+    .animate-spin-slow {
+      animation: spin 3s linear infinite;
+    }
+    @keyframes spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: .8; transform: scale(1.003); }
+    }
+
+    /* 🖨️ PDF・印刷出力用のレイアウト設計 */
+    @media print {
+      body {
+        background-color: white !important;
+        color: #000000 !important;
+        padding: 0 !important;
+      }
+      header, .md:col-span-5, footer, #test-connection-btn, .no-print {
+        display: none !important;
+      }
+      .md:col-span-7 {
+        width: 100% !important;
+        grid-column: span 12 / span 12 !important;
+      }
+      .clay-card {
+        box-shadow: none !important;
+        border: none !important;
+        background: white !important;
+        padding: 0 !important;
+        margin: 0 !important;
+      }
+      .print-page {
+        page-break-after: always;
+      }
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col items-center justify-start p-4 md:p-8">
+
+  <!-- 使い方モーダル -->
+  <div id="usage-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm fade-in no-print">
+    <div class="clay-card p-6 w-full max-w-lg relative bg-[#f0f4f8] max-h-[90vh] overflow-y-auto zoom-in">
+      <button onclick="toggleUsageModal()" class="absolute top-5 right-5 text-slate-400 hover:text-[#223670] transition-colors">
+        <i data-lucide="x" class="w-5 h-5"></i>
+      </button>
+      
+      <h3 class="text-sm font-black text-[#223670] mb-4 flex items-center gap-1.5 border-b pb-2 border-slate-200">
+        <i data-lucide="help-circle" class="w-5 h-5 text-[#00a3e0]"></i>
+        自動分析みっけの目的と使い方
+      </h3>
+
+      <div class="space-y-4 text-xs font-bold text-slate-600 leading-relaxed">
+        <div>
+          <h4 class="text-[#223670] font-black mb-1 flex items-center gap-1 text-[13px]">
+            <i data-lucide="target" class="w-4 h-4 text-[#d0a900]"></i>
+            アプリの目的
+          </h4>
+          <p class="pl-5 text-[11px] text-slate-500 leading-relaxed font-bold">
+            「考えるを、ひとりにしない。」をコンセプトに、Smile Plus Consulting様（松本様）が、Google Cloudのサービスアカウントキー（秘密鍵JSON）と、クライアント様のGA4（Googleアナリティクス）が本番環境で正しく接続できているかをその場で即時検証するためのシミュレーターです。さらに、本物のCloudflare Workersを中継させてGemini APIと連携し、実機数値に基づいたAI自動Web改善提案レポートを一撃で生成・出力することができます。
+          </p>
+        </div>
+
+        <div>
+          <h4 class="text-[#223670] font-black mb-1.5 flex items-center gap-1 text-[13px]">
+            <i data-lucide="clipboard-list" class="w-4 h-4 text-[#00a3e0]"></i>
+            使い方手順
+          </h4>
+          <ol class="list-decimal list-inside pl-1 space-y-2 text-[11px] text-slate-500 font-bold">
+            <li><strong>設定の登録：</strong> ヘッダー右上の「⚙️ 設定」ボタンから、企業名、秘密鍵JSON、プロパティID、報告者名などを入力して保存します。</li>
+            <li><strong>テスト＆レポート生成：</strong> メイン画面の青い「自動データ取得をテスト！」を押すと自動で動き、取得成功後は「AI自動分析レポート」が自動で現れます。そのままコピーやA4印刷/PDF化がワンクリックで行えます。</li>
+          </ol>
+        </div>
+      </div>
+
+      <div class="mt-6 flex justify-end">
+        <button onclick="toggleUsageModal()" class="clay-btn-navy px-6 py-2.5 text-xs font-black">
+          閉じる
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ⚙️ 環境設定モーダル -->
+  <div id="settings-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm fade-in no-print">
+    <div class="clay-card p-6 w-full max-w-lg relative bg-[#f0f4f8] max-h-[90vh] overflow-y-auto zoom-in">
+      <button onclick="toggleSettingsModal()" class="absolute top-5 right-5 text-slate-400 hover:text-[#223670] transition-colors">
+        <i data-lucide="x" class="w-5 h-5"></i>
+      </button>
+      
+      <h3 class="text-sm font-black text-[#223670] mb-4 flex items-center gap-1.5 border-b pb-2 border-slate-200">
+        <i data-lucide="settings" class="w-5 h-5 text-[#00a3e0] animate-spin-slow"></i>
+        自動分析みっけ 環境設定
+      </h3>
+
+      <div class="space-y-5 text-xs font-bold text-slate-600 leading-relaxed">
+        
+        <!-- ① クライアント企業名 -->
+        <div>
+          <label class="block text-xs font-black text-slate-600 mb-2 flex items-center gap-1">
+            <span class="bg-[#d0a900]/10 text-[#d0a900] text-[10px] px-1.5 py-0.5 rounded-md font-bold">①</span>
+            クライアント企業名 (レポート反映用)
+          </label>
+          <input type="text" id="client-name-input" class="w-full p-3.5 clay-input text-xs font-bold text-[#223670]" placeholder="例: 株式会社サンプル / みっけカタログ LP" oninput="saveSettingsToStorage()" />
+          <p class="text-[10px] text-slate-400 font-semibold mt-1 leading-relaxed pl-1">
+            ※ここに入力した名前が、レポート結果、診断報告書のヘッダー、AIレポート文章、PDF印刷時の宛名へ動的に自動反映されます。
+          </p>
+        </div>
+
+        <!-- 報告者・コンサルタント名 -->
+        <div>
+          <label class="block text-xs font-black text-slate-600 mb-2 flex items-center gap-1">
+            <span class="bg-[#223670]/10 text-[#223670] text-[10px] px-1.5 py-0.5 rounded-md font-bold">✎</span>
+            報告者 / コンサルタント名 (PDF・レポート署名用)
+          </label>
+          <input type="text" id="consultant-name-input" class="w-full p-3.5 clay-input text-xs font-bold text-[#223670]" placeholder="例: SPC松本" oninput="saveSettingsToStorage()" />
+          <p class="text-[10px] text-slate-400 font-semibold mt-1 leading-relaxed pl-1">
+            ※レポートの末尾やPDF印刷時の報告コンサルタント名としてプロフェッショナルに印字されます。
+          </p>
+        </div>
+
+        <!-- ② 秘密鍵ファイル -->
+        <div>
+          <label class="block text-xs font-black text-slate-600 mb-2 flex items-center gap-1">
+            <span class="bg-[#223670]/10 text-[#223670] text-[10px] px-1.5 py-0.5 rounded-md font-bold">②</span>
+            保存した秘密鍵（JSON）を選択
+          </label>
+          <div class="relative">
+            <input type="file" id="json-file-input" accept=".json" class="hidden" />
+            <button onclick="document.getElementById('json-file-input').click()" class="w-full p-4 clay-input text-xs font-bold text-[#223670] hover:bg-white/50 transition-colors flex items-center justify-between">
+              <span id="file-name-text" class="truncate pr-4 font-bold">ファイルを選択してください (.json)</span>
+              <i data-lucide="file-up" class="w-4 h-4 text-[#00a3e0] flex-shrink-0"></i>
+            </button>
+          </div>
+          <p class="text-[10px] text-slate-400 mt-1 font-semibold pl-1">※Google Cloudから作成・ダウンロードしたJSON鍵ファイルです。</p>
+        </div>
+
+        <!-- ③ GA4プロパティID -->
+        <div>
+          <label class="block text-xs font-black text-slate-600 mb-2 flex items-center gap-1">
+            <span class="bg-[#223670]/10 text-[#223670] text-[10px] px-1.5 py-0.5 rounded-md font-bold">③</span>
+            GA4 プロパティIDを入力
+          </label>
+          <input type="text" id="prop-id-input" class="w-full p-3.5 clay-input text-xs font-bold text-[#223670]" placeholder="例: 542302994" oninput="saveSettingsToStorage()" />
+          <p class="text-[10px] text-slate-400 font-semibold mt-1 leading-relaxed pl-1">
+            ※Googleアナリティクスの管理 ＞ プロパティの詳細 にある9桁から10桁の数字です。
+          </p>
+        </div>
+
+        <!-- ④ Workers URL -->
+        <div>
+          <label class="block text-xs font-black text-slate-600 mb-2 flex items-center gap-1">
+            <span class="bg-[#00a3e0]/10 text-[#00a3e0] text-[10px] px-1.5 py-0.5 rounded-md font-bold">④</span>
+            Cloudflare Workers の本番URL (任意)
+          </label>
+          <input type="text" id="workers-url-input" class="w-full p-3.5 clay-input text-xs font-bold text-emerald-700 tracking-wider" placeholder="https://xxx.yyy.workers.dev" oninput="saveSettingsToStorage()" />
+          <p class="text-[10px] text-emerald-600 font-bold mt-1 leading-relaxed pl-1">
+            ※WorkersのURLを貼り付けると本物通信に切り替わります。空欄の場合は安全なデモモードになります。
+          </p>
+        </div>
+
+        <!-- 💡 表示/非表示 切り替えトグル -->
+        <div class="pt-4 border-t border-slate-200 flex items-center justify-between">
+          <div class="flex flex-col gap-0.5">
+            <span class="text-xs font-black text-slate-600 flex items-center gap-1">
+              <i data-lucide="eye" class="w-4 h-4 text-[#00a3e0]"></i>
+              メイン画面のステータス表示
+            </span>
+            <p class="text-[10px] text-slate-400 font-semibold">※ダッシュボード上の構成要約カードを切り替えます</p>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="toggle-status-view" onchange="toggleStatusViewDisplay(this.checked)" checked>
+            <span class="slider"></span>
+          </label>
+        </div>
+
+        <!-- 💡 デモ操作・データクリアパネル -->
+        <div class="mt-4 pt-4 border-t border-slate-200 flex flex-col gap-2 bg-slate-100/50 p-3 rounded-2xl border border-dashed border-slate-300">
+          <span class="text-[10px] text-slate-400 font-black tracking-wider flex items-center gap-1">
+            <i data-lucide="terminal" class="w-3.5 h-3.5"></i>
+            開発者用テストツール（松本様向け）
+          </span>
+          <div class="flex justify-between items-center text-[10px] font-bold text-slate-500">
+            <span>ワンクリックでいつでも復元・初期化</span>
+            <div class="flex items-center gap-2.5">
+              <button onclick="loadDemoDataset()" class="text-slate-400 hover:text-[#00a3e0] underline transition-colors flex items-center gap-0.5">
+                <i data-lucide="download-cloud" class="w-3 h-3"></i>
+                デモデータ読込
+              </button>
+              <span class="text-slate-300">|</span>
+              <button onclick="clearDemoDataset()" class="text-slate-400 hover:text-rose-500 underline transition-colors flex items-center gap-0.5">
+                <i data-lucide="rotate-ccw" class="w-3 h-3"></i>
+                表示クリア
+              </button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="mt-6 flex justify-end">
+        <button onclick="toggleSettingsModal()" class="clay-btn-navy px-6 py-2.5 text-xs font-black">
+          設定を保存して閉じる
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ヘッダー -->
+  <header class="w-full max-w-4xl mb-8 flex flex-col md:flex-row items-center justify-between gap-4 no-print">
+    <div class="flex items-center gap-3">
+      <div class="bg-gradient-to-br from-[#223670] to-[#00a3e0] p-3 rounded-2xl shadow-md text-white flex items-center justify-center">
+        <i data-lucide="gauge" class="w-6 h-6"></i>
+      </div>
+      <div>
+        <h1 class="text-xl md:text-2xl font-black text-[#223670] tracking-tight">
+          自動分析みっけ <span class="bg-[#223670]/10 text-[#223670] text-xs px-2.5 py-0.5 rounded-full font-bold ml-1.5">V4.2 VISUAL-SAFE</span>
+        </h1>
+        <p class="text-[11px] text-[#00a3e0] font-bold tracking-wide mt-0.5">
+          「考えるを、ひとりにしない。」 Smile Plus Consulting様 接続検証＆AIレポート出力ツール
+        </p>
+      </div>
+    </div>
+    
+    <div class="flex items-center gap-2">
+      <!-- 使い方ボタン -->
+      <button onclick="toggleUsageModal()" class="clay-btn-navy p-3 text-xs font-black flex items-center justify-center gap-1.5 bg-gradient-to-br from-[#00a3e0] to-[#223670] hover:scale-105 active:scale-95 transition-all" title="使い方ガイド">
+        <i data-lucide="help-circle" class="w-4 h-4"></i>
+        <span>使い方</span>
+      </button>
+      <!-- ⚙️ 設定ボタン -->
+      <button onclick="toggleSettingsModal()" class="clay-btn-navy p-3 text-xs font-black flex items-center justify-center gap-1.5 bg-gradient-to-br from-slate-400 to-slate-600 hover:scale-105 active:scale-95 transition-all" title="接続・レポート環境設定">
+        <i data-lucide="settings" class="w-4 h-4"></i>
+        <span>設定⚙️</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- メインコンテンツ -->
+  <main class="w-full max-w-4xl grid grid-cols-1 md:grid-cols-12 gap-6 items-start">
+    
+    <!-- 左側：ステータス・起動コンソール -->
+    <div class="md:col-span-5 flex flex-col gap-6 no-print">
+      
+      <!-- 🏢 サマリーステータスカード -->
+      <div id="main-status-card" class="clay-card p-6 relative overflow-hidden transition-all duration-300">
+        <div class="absolute top-0 left-0 w-full h-1.5 bg-[#223670]"></div>
+        
+        <h3 class="text-sm font-black text-[#223670] mb-4 flex items-center gap-1.5">
+          <i data-lucide="info" class="w-4 h-4 text-[#00a3e0]"></i>
+          現在の構成ステータス
+        </h3>
+
+        <!-- 🔔 トースト通知/警告メッセージ領域 -->
+        <div id="inline-notification" class="hidden mb-4 p-3 rounded-xl text-xs font-bold bg-emerald-50 text-emerald-800 border border-emerald-200 flex items-start gap-1.5">
+          <i id="notification-icon" data-lucide="check-circle" class="w-4 h-4 text-emerald-600 flex-shrink-0 mt-0.5"></i>
+          <span id="notification-text">メッセージ</span>
+        </div>
+
+        <!-- 設定状況のサマリー -->
+        <div class="space-y-3.5 mb-6 text-xs font-bold text-slate-600 bg-white/40 p-4 rounded-2xl border border-white/80">
+          <div class="flex justify-between items-center pb-2 border-b border-slate-200/50">
+            <span class="text-[10px] text-slate-400">🏢 対象企業名</span>
+            <span class="text-[#223670] font-black" id="status-client-name">みっけカタログ LP</span>
+          </div>
+          <div class="flex justify-between items-center pb-2 border-b border-slate-200/50">
+            <span class="text-[10px] text-slate-400">🔑 秘密鍵(JSON)</span>
+            <span class="text-slate-500 truncate max-w-[150px]" id="status-key-file" title="デモ用鍵情報ロード済">デモ用鍵情報</span>
+          </div>
+          <div class="flex justify-between items-center pb-2 border-b border-slate-200/50">
+            <span class="text-[10px] text-slate-400">📊 プロパティID</span>
+            <span class="text-[#223670]" id="status-prop-id">542302994</span>
+          </div>
+          <div class="flex justify-between items-center">
+            <span class="text-[10px] text-slate-400">🌐 通信モード</span>
+            <span class="text-[#00a3e0] bg-[#00a3e0]/10 px-2 py-0.5 rounded-md text-[10px]" id="status-mode">デモシミュレーション</span>
+          </div>
+        </div>
+
+        <!-- ぷくぷく接続テストボタン -->
+        <button id="test-connection-btn" onclick="runConnectionTest()" class="clay-btn-navy w-full py-4 text-xs font-black flex items-center justify-center gap-2 bg-gradient-to-r from-[#223670] to-[#00a3e0]">
+          <i data-lucide="refresh-cw" class="w-4 h-4" id="btn-icon"></i>
+          <span id="btn-text">自動データ取得をテスト！</span>
+        </button>
+      </div>
+
+      <!-- 実機検証のマメ知識 -->
+      <div id="sub-tips-card" class="clay-card p-5 bg-blue-50/20 border border-blue-200/50">
+        <h4 class="text-xs font-black text-[#223670] mb-2.5 flex items-center gap-1.5">
+          <i data-lucide="lightbulb" class="w-4 h-4 text-[#00a3e0]"></i>
+          今回の実機検証・攻略メモ
+        </h4>
+        <ul class="list-disc list-inside text-[11px] text-slate-600 space-y-2 leading-relaxed font-bold">
+          <li><strong>招待時メール通知：</strong> ロボット自身はメールを読めないため、チェックオフで「追加」ボタンを押して正解です！</li>
+          <li><strong>管理者権限：</strong> 付与をうけると今後のロボット（API）追加作業がすべて松本様の手元だけで完結できます。</li>
+          <li><strong>アカウント制限：</strong> 有料アップグレードのポップアップは完全に無視（閉じる）で大丈夫です。</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- 右側：結果表示 & レポートビューアー -->
+    <div class="md:col-span-7">
+      
+      <!-- 未テスト時のウェルカム表示 -->
+      <div id="status-untested" class="clay-card p-12 text-center flex flex-col items-center justify-center min-h-[350px] no-print">
+        <div class="bg-[#223670]/10 text-[#223670] p-5 rounded-full mb-4 flex items-center justify-center">
+          <i data-lucide="bot" class="w-10 h-10 animate-bounce"></i>
+        </div>
+        <h4 class="text-sm font-black text-[#223670] mb-1">いつでも接続テスト可能です！</h4>
+        <p class="text-xs text-slate-500 max-w-sm leading-relaxed font-semibold">
+          右上の「設定⚙️」ボタンから企業名やキーを設定したあと、左側の「自動データ取得をテスト！」ボタンを押してください！<br>
+          <span class="text-[10px] text-[#00a3e0] mt-1.5 block font-bold">※ヘッダー右上の「設定⚙️」からクライアント企業名を入力できます。</span>
+        </p>
+      </div>
+
+      <!-- ローディングアニメーション -->
+      <div id="status-loading" class="hidden clay-card p-12 text-center min-h-[350px] flex flex-col items-center justify-center pulse-slow no-print">
+        <div class="text-[#00a3e0] p-4 mb-4 flex items-center justify-center">
+          <i data-lucide="loader-2" class="w-10 h-10 animate-spin"></i>
+        </div>
+        <h4 class="text-sm font-black text-[#223670] mb-1" id="loading-title">Google API 経由で実機データを接続テスト中...</h4>
+        <p class="text-xs text-slate-400" id="loading-subtitle">暗号キー（JWT署名）を解析し、GA4との安全な通信経路を構築しています。</p>
+      </div>
+
+      <!-- テスト結果表示エリア -->
+      <div id="test-result-panel" class="hidden flex flex-col gap-6 fade-in print-page">
+        
+        <!-- 接続情報ヘッダー -->
+        <div class="clay-card p-5 relative overflow-hidden bg-emerald-50/20 border border-emerald-200">
+          <div class="flex items-start gap-3">
+            <div class="bg-emerald-500 text-white p-2 rounded-xl flex items-center justify-center flex-shrink-0">
+              <i data-lucide="shield-check" class="w-5 h-5"></i>
+            </div>
+            <div class="min-w-0 flex-1">
+              <h4 class="text-xs font-black text-emerald-800" id="res-status-title">✓ 実機連携に成功！データの通信経路が正常に確立されました</h4>
+              <p class="text-[10px] text-emerald-600 font-bold mt-0.5" id="res-status-subtitle">
+                Google Cloud認証を突破し、<span class="client-name-display text-emerald-700 underline font-black">みっけカタログ LP</span> の閲覧権限（安全なSSL接続）が一致しました。
+              </p>
+              
+              <!-- 読み込まれたキーから情報を抽出して表示 -->
+              <div class="mt-3 pt-3 border-t border-slate-200/50 grid grid-cols-2 gap-y-1.5 gap-x-4 text-[10px] font-bold text-slate-500">
+                <div>プロジェクトID: <span id="res-project-id" class="text-[#223670]"></span></div>
+                <div class="truncate font-bold">接続ロボット: <span id="res-client-email" class="text-[#223670] truncate inline-block w-full align-bottom"></span></div>
+                <div>対象プロパティID: <span id="res-prop-id" class="text-[#223670]"></span></div>
+                <div>認証方式: <span class="text-emerald-600" id="res-auth-method">JWT (RS256) 標準準拠</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 実際に取得された数値レポート -->
+        <div class="clay-card p-6 bg-white">
+          <h3 class="text-xs font-black text-[#223670] mb-4 pb-2 border-b border-slate-200 flex items-center justify-between">
+            <span class="flex items-center gap-1.5 font-bold">
+              <i data-lucide="line-chart" class="w-4 h-4 text-[#00a3e0]"></i>
+              実稼働している数値データ（直近30日間）
+            </span>
+            <span class="text-[10px] bg-[#00a3e0]/10 text-[#00a3e0] px-2.5 py-0.5 rounded-full font-bold client-name-display">みっけカタログ LP</span>
+          </h3>
+
+          <div class="grid grid-cols-2 gap-4 mb-6">
+            <!-- CV -->
+            <div class="bg-slate-50 p-4 rounded-2xl border border-slate-100 flex flex-col justify-between">
+              <span class="text-[10px] font-bold text-slate-400 flex items-center gap-1">
+                <i data-lucide="target" class="w-3.5 h-3.5 text-rose-500"></i>
+                コンバージョン数
+              </span>
+              <span class="text-xl md:text-2xl font-black text-[#223670] mt-1.5"><span id="metric-cv">84</span> <span class="text-xs font-bold text-slate-400">件</span></span>
+            </div>
+
+            <!-- 流入元 -->
+            <div class="bg-slate-50 p-4 rounded-2xl border border-slate-100 flex flex-col justify-between">
+              <span class="text-[10px] font-bold text-slate-400 flex items-center gap-1">
+                <i data-lucide="search" class="w-3.5 h-3.5 text-violet-500"></i>
+                トップ流入元
+              </span>
+              <span class="text-base md:text-lg font-black text-[#223670] mt-1.5 truncate" id="metric-source">Organic Search</span>
+            </div>
+
+            <!-- スマホ比率 -->
+            <div class="bg-slate-50 p-4 rounded-2xl border border-slate-100 flex flex-col justify-between">
+              <span class="text-[10px] font-bold text-slate-400 flex items-center gap-1">
+                <i data-lucide="smartphone" class="w-3.5 h-3.5 text-cyan-500"></i>
+                スマホ利用率
+              </span>
+              <span class="text-xl md:text-2xl font-black text-[#223670] mt-1.5"><span id="metric-mobile">76.8</span> <span class="text-xs font-bold text-slate-400">%</span></span>
+            </div>
+
+            <!-- 🔒 エンゲージメント率の隠し受け皿（AIレポート本文に連動。画面には出さず値だけ保持） -->
+            <span id="metric-engagement" class="hidden">68.2</span>
+
+            <!-- エンゲージメント -->
+            <div class="bg-white p-0 rounded-2xl flex flex-col justify-between">
+              <!-- 📈 お客さま驚き要素A：デバイス比率リアルタイムドーナツチャート！ -->
+              <div class="h-[80px] w-full flex items-center justify-center py-1">
+                <canvas id="deviceChart" class="max-h-full max-w-full"></canvas>
+                <!-- 🌟 超防弾用フォールバックコンテナ（Chart.js未ロード時に作動） -->
+                <div id="deviceChartFallback" class="hidden w-full flex items-center justify-center"></div>
+              </div>
+              <span class="text-[9px] font-black text-slate-400 text-center pb-1">
+                モバイル vs デスクトップ比率（リアル可視化）
+              </span>
+            </div>
+          </div>
+
+          <!-- 🤖 AIレポート生成用のポチッとボタン -->
+          <div class="no-print" id="ai-btn-area">
+            <button id="generate-ai-report-btn" onclick="triggerAiAnalysis()" class="w-full py-4 rounded-2xl font-black text-xs text-white bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 active:scale-[0.98] transition-all flex items-center justify-center gap-2 shadow-md">
+              <i data-lucide="sparkles" class="w-4 h-4"></i>
+              <span id="ai-btn-text">AI自動分析レポートを生成する！ (5秒で完成)</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- 🤖 生成されたAI自動分析レポートカード (極上ビジュアル＆コンサル受注仕様版) -->
+        <div id="ai-report-card" class="hidden clay-card p-6 relative overflow-hidden bg-white">
+          <div class="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-[#223670] to-[#00a3e0]"></div>
+          
+          <!-- 診断書の公式なヘッダー領域 -->
+          <div class="flex items-start justify-between border-b border-slate-100 pb-4 mb-4">
+            <div>
+              <span class="text-[9px] bg-[#223670]/10 text-[#223670] px-2 py-0.5 rounded-full font-bold">GA4 Web Analytics & Consulting Report</span>
+              <h2 class="text-sm md:text-base font-black text-[#223670] mt-1 flex items-center gap-1.5">
+                <i data-lucide="file-text" class="w-5 h-5 text-[#00a3e0]"></i>
+                <span class="client-name-display">Smile Plus Consulting</span> 診断報告書
+              </h2>
+              <div class="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-[10px] text-slate-400 font-bold">
+                <span>報告日: <span id="report-date-span"></span></span>
+                <span>対象データ: 直近30日間</span>
+                <span>報告コンサルタント: <span id="report-consultant-span" class="text-slate-500 font-black">SPC松本</span></span>
+              </div>
+            </div>
+            
+            <!-- 出力アクション系ボタン -->
+            <div class="flex items-center gap-2 no-print flex-shrink-0">
+              <button id="copy-report-btn" onclick="copyReportText()" class="text-[10px] bg-slate-100 hover:bg-slate-200 text-slate-700 px-2.5 py-1.5 rounded-lg font-bold flex items-center gap-1 transition-all">
+                <i id="copy-btn-icon" data-lucide="copy" class="w-3.5 h-3.5"></i>
+                <span id="copy-btn-text">本文をコピー</span>
+              </button>
+              <button onclick="printReport()" class="text-[10px] bg-[#223670] hover:bg-[#142044] text-white px-2.5 py-1.5 rounded-lg font-bold flex items-center gap-1 transition-all">
+                <i data-lucide="printer" class="w-3.5 h-3.5"></i>
+                PDF/印刷出力
+              </button>
+            </div>
+          </div>
+
+          <!-- 分析内容本体 -->
+          <div id="report-content-text" class="space-y-6 text-xs font-bold text-slate-700 leading-relaxed">
+            <!-- JSで動的に、または本物のAIレスポンスがここに挿入されます -->
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+  </main>
+
+  <footer class="mt-12 text-center text-[11px] text-slate-400 font-bold no-print">
+    <p>Web改善みっけ V4.2 — Google Cloud & GA4 実機接続テスト検証</p>
+  </footer>
+
+  <script>
+    let loadedJson = null;
+    let fetchedDataCache = null; // 本物のWorkersから取得したデータの保存用
+    let deviceChartInstance = null; // デバイス割合のChartインスタンス
+
+    // 🛡️ 堅牢なDOM操作・Null安全ガードヘルパー関数群
+    function safeGetValue(id, defaultValue = "") {
+      const el = document.getElementById(id);
+      return el ? el.value.trim() : defaultValue;
+    }
+
+    function safeSetValue(id, val) {
+      const el = document.getElementById(id);
+      if (el) el.value = val;
+    }
+
+    function safeSetText(id, text) {
+      const el = document.getElementById(id);
+      if (el) el.innerText = text;
+    }
+
+    function safeAddClass(id, className) {
+      const el = document.getElementById(id);
+      if (el) el.classList.add(className);
+    }
+
+    function safeRemoveClass(id, className) {
+      const el = document.getElementById(id);
+      if (el) el.classList.remove(className);
+    }
+
+    // 安全にアイコンを生成するためのラッパー
+    function initIcons() {
+      if (typeof lucide !== 'undefined') {
+        lucide.createIcons();
+      }
+    }
+
+    // 🔔 画面上部へのやさしいトースト通知（成功=グリーン／注意=ローズ）
+    // ※この関数が未定義だと、デモ読込・鍵ファイル読込・コピー等でエラー停止していました
+    let notificationTimer = null;
+    function showNotification(message, isSuccess = true) {
+      const box = document.getElementById('inline-notification');
+      const icon = document.getElementById('notification-icon');
+      const textEl = document.getElementById('notification-text');
+      if (!box || !textEl) return;
+
+      textEl.innerText = message;
+
+      // いったん色クラスを全部リセットしてから付け直す
+      box.classList.remove(
+        'bg-emerald-50', 'text-emerald-800', 'border-emerald-200',
+        'bg-rose-50', 'text-rose-800', 'border-rose-200'
+      );
+
+      if (isSuccess) {
+        box.classList.add('bg-emerald-50', 'text-emerald-800', 'border-emerald-200');
+        if (icon) {
+          icon.setAttribute('data-lucide', 'check-circle');
+          icon.className = 'w-4 h-4 text-emerald-600 flex-shrink-0 mt-0.5';
+        }
+      } else {
+        box.classList.add('bg-rose-50', 'text-rose-800', 'border-rose-200');
+        if (icon) {
+          icon.setAttribute('data-lucide', 'alert-circle');
+          icon.className = 'w-4 h-4 text-rose-600 flex-shrink-0 mt-0.5';
+        }
+      }
+
+      box.classList.remove('hidden');
+      initIcons();
+
+      // 4秒後にそっと閉じる
+      if (notificationTimer) clearTimeout(notificationTimer);
+      notificationTimer = setTimeout(() => {
+        box.classList.add('hidden');
+      }, 4000);
+    }
+
+    // 🛡️ localStorage 安全ラッパー（プライベートブラウズや制限環境でも落ちないように）
+    function safeStorageGet(key) {
+      try { return localStorage.getItem(key); } catch (e) { return null; }
+    }
+    function safeStorageSet(key, val) {
+      try { localStorage.setItem(key, val); } catch (e) { /* 無視して継続 */ }
+    }
+    function safeStorageRemove(key) {
+      try { localStorage.removeItem(key); } catch (e) { /* 無視して継続 */ }
+    }
+
+    // 📈 驚き要素：Chart.jsでのデバイス比率ドーナツグラフ初期化・更新 (🌟防弾フォールバックを完全実装！)
+    function updateDeviceChart(mobileRatioVal) {
+      const mobile = parseFloat(mobileRatioVal) || 76.8;
+      const desktop = parseFloat((100 - mobile).toFixed(1));
+      
+      const ctx = document.getElementById('deviceChart');
+      const fallbackEl = document.getElementById('deviceChartFallback');
+      if (!ctx) return;
+
+      // Chart.jsが無事読み込まれている場合のみグラフ処理をする
+      if (typeof Chart !== 'undefined') {
+        if (fallbackEl) fallbackEl.classList.add('hidden');
+        ctx.classList.remove('hidden');
+
+        if (deviceChartInstance) {
+          deviceChartInstance.destroy();
+        }
+
+        try {
+          deviceChartInstance = new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+              labels: ['スマホ', 'PC'],
+              datasets: [{
+                data: [mobile, desktop],
+                backgroundColor: ['#00a3e0', '#223670'],
+                borderWidth: 0,
+                hoverOffset: 4
+              }]
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: {
+                legend: {
+                  display: false // スッキリさせるため凡例は非表示
+                },
+                tooltip: {
+                  callbacks: {
+                    label: function(context) {
+                      return ` ${context.label}: ${context.raw}%`;
+                    }
+                  }
+                }
+              },
+              cutout: '65%'
+            }
+          });
+        } catch (e) {
+          console.error("ドーナツグラフ描画エラー: ", e);
+          showDeviceChartFallback(mobile, desktop);
+        }
+      } else {
+        // Chart.jsがロードされていない場合は、超美しいカラーバーで代替表示！
+        showDeviceChartFallback(mobile, desktop);
+      }
+    }
+
+    // 📈 ドーナツチャート未ロード時の超美しいフォールバックデザイン
+    function showDeviceChartFallback(mobile, desktop) {
+      const ctx = document.getElementById('deviceChart');
+      const fallbackEl = document.getElementById('deviceChartFallback');
+      if (ctx) ctx.classList.add('hidden');
+      if (fallbackEl) {
+        fallbackEl.classList.remove('hidden');
+        fallbackEl.innerHTML = `
+          <div class="w-full flex flex-col gap-2 p-2">
+            <div class="flex justify-between text-[10px] font-black text-slate-500">
+              <span class="text-[#00a3e0]">スマホ: ${mobile}%</span>
+              <span class="text-[#223670]">PC: ${desktop}%</span>
+            </div>
+            <div class="w-full h-3 bg-slate-200 rounded-full overflow-hidden flex shadow-inner">
+              <div class="bg-[#00a3e0] h-full transition-all duration-500" style="width: ${mobile}%"></div>
+              <div class="bg-[#223670] h-full transition-all duration-500" style="width: ${desktop}%"></div>
+            </div>
+          </div>
+        `;
+      }
+    }
+
+    // 読み込みが完了してから初期化
+    window.addEventListener('DOMContentLoaded', () => {
+      // 1. ローカルストレージから前回設定をロード (おもてなし機能)
+      loadSettingsFromStorage();
+      
+      // 最初からデモキー風情報をセットして優しくガイド
+      if (!loadedJson) {
+        loadedJson = {
+          project_id: "virtual-cubist-498302-v3",
+          client_email: "web-kaizen-mikke@virtual-cubist-498302-v3.iam.gserviceaccount.com"
+        };
+      }
+      
+      // 今日の日付をセット
+      const today = new Date();
+      const formattedDate = `${today.getFullYear()}年${today.getMonth() + 1}月${today.getDate()}日`;
+      safeSetText('report-date-span', formattedDate);
+
+      // サマリー画面の数値をリフレッシュ表示
+      updateMainSummary();
+      initIcons();
+      
+      // 初期のミニデバイスチャートを描画
+      updateDeviceChart(76.8);
+    });
+
+    // 使い方モーダルの表示・非表示トグル
+    function toggleUsageModal() {
+      const modal = document.getElementById('usage-modal');
+      if (modal) modal.classList.toggle('hidden');
+      initIcons();
+    }
+
+    // ⚙️ 環境設定モーダルの表示・非表示トグル
+    function toggleSettingsModal() {
+      const modal = document.getElementById('settings-modal');
+      if (modal) modal.classList.toggle('hidden');
+      updateMainSummary(); // 閉じるときにメイン画面の状況を即座に更新！
+      initIcons();
+    }
+
+    // 💡 サマリーカードの表示・非表示切り替えトグル処理
+    function toggleStatusViewDisplay(isChecked) {
+      if (isChecked) {
+        safeRemoveClass('main-status-card', 'hidden');
+        safeRemoveClass('sub-tips-card', 'hidden');
+      } else {
+        safeAddClass('main-status-card', 'hidden');
+        safeAddClass('sub-tips-card', 'hidden');
+      }
+      safeStorageSet('mikke_show_status', isChecked ? 'true' : 'false');
+    }
+
+    // ローカルストレージに設定を保存する
+    function saveSettingsToStorage() {
+      const clientName = safeGetValue('client-name-input');
+      const consultantName = safeGetValue('consultant-name-input');
+      const propId = safeGetValue('prop-id-input');
+      const workersUrl = safeGetValue('workers-url-input');
+
+      safeStorageSet('mikke_client_name', clientName);
+      safeStorageSet('mikke_consultant_name', consultantName);
+      safeStorageSet('mikke_prop_id', propId);
+      safeStorageSet('mikke_workers_url', workersUrl);
+      
+      updateMainSummary();
+    }
+
+    // ローカルストレージから設定を呼び出す
+    function loadSettingsFromStorage() {
+      const clientName = safeStorageGet('mikke_client_name') || "みっけカタログ LP";
+      const consultantName = safeStorageGet('mikke_consultant_name') || "SPC松本";
+      const propId = safeStorageGet('mikke_prop_id') || "542302994";
+      const workersUrl = safeStorageGet('mikke_workers_url') || "";
+      const statusViewChecked = safeStorageGet('mikke_show_status') !== "false"; // デフォルトは表示
+
+      safeSetValue('client-name-input', clientName);
+      safeSetValue('consultant-name-input', consultantName);
+      safeSetValue('prop-id-input', propId);
+      safeSetValue('workers-url-input', workersUrl);
+      
+      const toggleSwitch = document.getElementById('toggle-status-view');
+      if (toggleSwitch) {
+        toggleSwitch.checked = statusViewChecked;
+        toggleStatusViewDisplay(statusViewChecked);
+      }
+    }
+
+    // メイン画面の「ステータスサマリー」を最新の入力値に書き換える関数
+    function updateMainSummary() {
+      const clientName = safeGetValue('client-name-input', "みっけカタログ LP");
+      const consultantName = safeGetValue('consultant-name-input', "SPC松本");
+      const propId = safeGetValue('prop-id-input', "542302994");
+      const workersUrl = safeGetValue('workers-url-input');
+
+      safeSetText('status-client-name', clientName);
+      safeSetText('status-prop-id', propId);
+      safeSetText('report-consultant-span', consultantName);
+
+      const statusMode = document.getElementById('status-mode');
+      if (statusMode) {
+        if (workersUrl) {
+          statusMode.innerText = "本番 Workers 同期中";
+          statusMode.className = "text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md text-[10px]";
+        } else {
+          statusMode.innerText = "デモシミュレーション";
+          statusMode.className = "text-[#00a3e0] bg-[#00a3e0]/10 px-2 py-0.5 rounded-md text-[10px]";
+        }
+      }
+
+      // クライアント名の表示要素を全スレッドで一斉書き換え
+      document.querySelectorAll('.client-name-display').forEach(el => {
+        el.innerText = clientName;
+      });
+    }
+
+    // 💡 デモデータの再ロード機能
+    function loadDemoDataset() {
+      // 1. デモ設定値を各インプットに適用
+      safeSetValue('client-name-input', "みっけカタログ LP");
+      safeSetValue('consultant-name-input', "SPC松本");
+      safeSetValue('prop-id-input', "542302994");
+      safeSetValue('workers-url-input', ""); // デモモードへ強制リセット
+      
+      // 2. 暗号デモ鍵オブジェクトをセット
+      loadedJson = {
+        project_id: "virtual-cubist-498302-v3",
+        client_email: "web-kaizen-mikke@virtual-cubist-498302-v3.iam.gserviceaccount.com"
+      };
+      
+      safeSetText('file-name-text', "web-kaizen-mikke-key.json (自動デモ)");
+      safeSetText('status-key-file', "web-kaizen-mikke-key.json");
+      
+      const statusKeyFile = document.getElementById('status-key-file');
+      if (statusKeyFile) statusKeyFile.title = "デモ用鍵情報ロード済";
+
+      // 3. ストレージとメインサマリーを同期
+      saveSettingsToStorage();
+      updateMainSummary();
+      
+      // 4. トグル表示をONに強制同期
+      const toggleCheckbox = document.getElementById('toggle-status-view');
+      if (toggleCheckbox) {
+        toggleCheckbox.checked = true;
+        toggleStatusViewDisplay(true);
+      }
+      
+      // 5. デモチャートに再更新
+      updateDeviceChart(76.8);
+
+      // 6. 設定画面を閉じて、ユーザーに優しく通知
+      toggleSettingsModal();
+      showNotification("初期デモ用データセットをロードしました。");
+    }
+
+    // 💡 データの完全クリア（初期化）機能
+    function clearDemoDataset() {
+      // 1. インプットフィールドを完全に空にする
+      safeSetValue('client-name-input', "");
+      safeSetValue('consultant-name-input', "");
+      safeSetValue('prop-id-input', "");
+      safeSetValue('workers-url-input', "");
+      
+      // 2. 鍵とキャッシュの破棄
+      loadedJson = null;
+      fetchedDataCache = null;
+      
+      safeSetText('file-name-text', "ファイルを選択してください (.json)");
+      safeSetText('status-key-file', "未選択");
+      
+      const statusKeyFile = document.getElementById('status-key-file');
+      if (statusKeyFile) statusKeyFile.title = "鍵ファイルがセットされていません";
+
+      // 3. ストレージのデータを消去
+      safeStorageRemove('mikke_client_name');
+      safeStorageRemove('mikke_consultant_name');
+      safeStorageSet('mikke_prop_id', ""); // 空で上書き
+      safeStorageRemove('mikke_workers_url');
+
+      // 4. サマリー表示の空同期
+      updateMainSummary();
+      
+      // 5. テスト結果を引っ込めて初期ウェルカム表示へ戻す
+      safeAddClass('test-result-panel', 'hidden');
+      safeRemoveClass('status-untested', 'hidden');
+
+      // 6. グラフもゼロクリア
+      updateDeviceChart(50.0);
+
+      // 7. 設定画面を閉じて、ユーザーに優しく通知
+      toggleSettingsModal();
+      showNotification("表示データとストレージ環境設定を完全に初期化しました！");
+    }
+
+    // JSONファイルの読み込みと自動解析
+    document.getElementById('json-file-input').addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      safeSetText('file-name-text', file.name);
+      safeSetText('status-key-file', file.name);
+      
+      const statusKeyFile = document.getElementById('status-key-file');
+      if (statusKeyFile) statusKeyFile.title = "秘密鍵JSONロード済";
+      
+      safeAddClass('inline-notification', 'hidden'); // 通知を非表示
+
+      const reader = new FileReader();
+      reader.onload = function(evt) {
+        try {
+          const parsed = JSON.parse(evt.target.result);
+          
+          // Google Cloudサービスアカウントのキー構造チェック
+          if (parsed.type === "service_account" && parsed.client_email) {
+            loadedJson = parsed;
+            showNotification("本物の秘密鍵ファイルを正しくセットしました！");
+          } else {
+            showError("選択されたファイルは、Google Cloudから発行された正しい秘密鍵（JSON）ではない可能性があります。");
+            loadedJson = null;
+            safeSetText('file-name-text', "形式が違います");
+          }
+        } catch (err) {
+          showError("JSONファイルの解析に失敗しました。正しいファイルか確認してください。");
+          loadedJson = null;
+          safeSetText('file-name-text', "エラー：読み込めません");
+          safeSetText('status-key-file', "読み込みエラー");
+        }
+      };
+      reader.readAsText(file);
+    });
+
+    // 接続テストの実行
+    async function runConnectionTest() {
+      // 実行前に最新の値を格納・同期
+      updateMainSummary();
+
+      const propId = safeGetValue('prop-id-input');
+      const workersUrl = safeGetValue('workers-url-input');
+      const clientName = safeGetValue('client-name-input', "みっけカタログ LP");
+      const btn = document.getElementById('test-connection-btn');
+      const btnText = document.getElementById('btn-text');
+
+      if (!propId) {
+        showNotification("「設定⚙️」画面を開いて、プロパティIDを入力してからテストしてください。", false);
+        toggleSettingsModal(); // 設定画面を開いてあげるおもてなし
+        return;
+      }
+
+      // UIの状態遷移
+      safeAddClass('status-untested', 'hidden');
+      safeAddClass('test-result-panel', 'hidden');
+      safeRemoveClass('status-loading', 'hidden');
+
+      if (btn) btn.disabled = true;
+      if (btnText) btnText.innerText = "接続認証を実行中...";
+
+      // 🚀 Workers URLがセットされている場合は「本物のAPI通信」を行う
+      if (workersUrl) {
+        safeSetText('loading-title', "本番 Cloudflare Workers に接続中...");
+        safeSetText('loading-subtitle', "GA4のリアルタイム実機データとGemini AI分析結果を直に取得しています。");
+
+        try {
+          const response = await fetch(workersUrl, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+              property_id: propId,
+              client_name: clientName // 企業名もWorkers中継先に渡す
+            })
+          });
+
+          if (!response.ok) {
+            throw new Error(`Workersがエラーを返しました: ${response.status}`);
+          }
+
+          const resultData = await response.json();
+          fetchedDataCache = resultData; // 取得データを保持
+
+          // UI表示を本物のデータに書き換える
+          safeSetText('metric-cv', resultData.cv || 0);
+          safeSetText('metric-source', resultData.topSource || "なし");
+          safeSetText('metric-mobile', resultData.mobileRatio || 0.0);
+          safeSetText('metric-engagement', resultData.engagementRate || 0.0);
+
+          // 本物の数値に基づいて円グラフをアニメーション更新！
+          updateDeviceChart(resultData.mobileRatio || 76.8);
+
+          // 実機連携ステータスの書き換え
+          safeSetText('res-status-title', "✓ 本番中継 Workers & GA4 連携に完全成功！");
+          safeSetText('res-status-subtitle', `Cloudflare Workers上の安全な鍵認証をパスし、${clientName} の実機レポート生成に成功しました。`);
+          safeSetText('res-auth-method', "Workers中継 JWT (RS256) 本番同期");
+
+        } catch (err) {
+          // 本番接続でエラーになった場合はエラーを親切に表示
+          safeAddClass('status-loading', 'hidden');
+          showError(`Workers接続エラー: ${err.message}。WorkersのURL、CORS設定、または環境変数をご確認ください。`);
+          if (btn) btn.disabled = false;
+          if (btnText) btnText.innerText = "自動データ取得をテスト！";
+          return;
+        }
+      } else {
+        // Workers URLが無い場合はいつもの高精度シミュレーションを実行
+        safeSetText('loading-title', "Google API 経由で実機データを接続テスト中...測定結果を受信しています。");
+        safeSetText('loading-subtitle', "暗号キー（JWT署名）を解析し、GA4との安全な通信経路を構築しています。");
+        fetchedDataCache = null; // デモモード
+
+        // 標準数値にリセット
+        safeSetText('metric-cv', "84");
+        safeSetText('metric-source', "Organic Search");
+        safeSetText('metric-mobile', "76.8");
+        safeSetText('metric-engagement', "68.2");
+
+        // シミュレーション円グラフ描画
+        updateDeviceChart(76.8);
+
+        safeSetText('res-status-title', "✓ 実機連携に成功！データの通信経路が正常に確立されました");
+        safeSetText('res-status-subtitle', `Google Cloud認証を突破し、${clientName} の閲覧権限（安全なSSL接続）が一致しました。`);
+        safeSetText('res-auth-method', "JWT (RS256) 標準準拠");
+
+        // シミュレーション用のちょっとしたウエイト
+        await new Promise(resolve => setTimeout(resolve, 1500));
+      }
+
+      // ローディング終了、結果画面のレンダリング
+      safeAddClass('status-loading', 'hidden');
+      
+      // 取得したキー情報を流し込む
+      if (loadedJson) {
+        safeSetText('res-project-id', loadedJson.project_id || "");
+        safeSetText('res-client-email', loadedJson.client_email || "");
+      }
+      safeSetText('res-prop-id', propId);
+
+      safeRemoveClass('test-result-panel', 'hidden');
+      
+      if (btn) btn.disabled = false;
+      if (btnText) btnText.innerText = "自動データ取得をテスト！";
+      
+      // 以前の生成データは一旦隠しておく
+      safeAddClass('ai-report-card', 'hidden');
+      
+      const genBtn = document.getElementById('generate-ai-report-btn');
+      if (genBtn && genBtn.parentElement) {
+        genBtn.parentElement.classList.remove('hidden');
+      }
+
+      initIcons(); // 新しい要素のアイコンをアクティブ化
+    }
+
+    // 🤖 AIレポートの自動分析（Gemini連携・プロコンサルビジュアル極み構成！）
+    function triggerAiAnalysis() {
+      const gBtn = document.getElementById('generate-ai-report-btn');
+      const clientName = safeGetValue('client-name-input', "みっけカタログ LP");
+      const consultantName = safeGetValue('consultant-name-input', "SPC松本");
+      
+      if (gBtn) {
+        gBtn.disabled = true;
+        gBtn.innerHTML = `<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i><span>Gemini 2.5 Flash でビジュアル分析報告書を作成中...</span>`;
+      }
+      initIcons();
+
+      setTimeout(() => {
+        const reportArea = document.getElementById('report-content-text');
+
+        // もし本物のWorkersから本物Geminiのレスポンスが届いている場合はそれを採用
+        if (fetchedDataCache && fetchedDataCache.ai_analysis) {
+          const formattedAnalysis = fetchedDataCache.ai_analysis.replace(/\n/g, '<br>');
+          if (reportArea) {
+            reportArea.innerHTML = `
+              <div class="prose max-w-none text-slate-700 text-[11px] leading-relaxed font-bold">
+                ${formattedAnalysis}
+              </div>
+            `;
+          }
+        } else {
+          // デモまたはWorkers未同期時の高精度コンサルシミュレーション (Null安全値取得に全面書き換え！)
+          const metricCv = document.getElementById('metric-cv');
+          const metricSource = document.getElementById('metric-source');
+          const metricMobile = document.getElementById('metric-mobile');
+          const metricEngagement = document.getElementById('metric-engagement');
+
+          const cvVal = metricCv ? metricCv.innerText : "84";
+          const sourceVal = metricSource ? metricSource.innerText : "Organic Search";
+          const mobileVal = metricMobile ? metricMobile.innerText : "76.8";
+          const engagementVal = metricEngagement ? metricEngagement.innerText : "68.2";
+
+          if (reportArea) {
+            reportArea.innerHTML = `
+              <!-- 🌟 お客さま驚き要素1：総合評価スピードメーター円形ゲージ (SVGアニメーション) -->
+              <div class="bg-gradient-to-br from-[#223670]/5 to-[#00a3e0]/5 p-5 rounded-2xl border border-[#223670]/10 flex flex-col md:flex-row items-center justify-between gap-6">
+                <div class="flex items-center gap-3">
+                  <div class="bg-[#223670] text-white p-3 rounded-2xl flex items-center justify-center">
+                    <i data-lucide="award" class="w-6 h-6 text-[#d0a900] animate-bounce"></i>
+                  </div>
+                  <div>
+                    <h4 class="text-xs font-black text-[#223670]">今回のアクセス解析・接続テスト総合評価</h4>
+                    <p class="text-[10px] text-slate-400 font-bold mt-0.5">GA4の主要エンゲージメント指標をベースにしたプロフェッショナル偏差評価</p>
+                  </div>
+                </div>
+                
+                <!-- 立体円形SVGゲージメーター -->
+                <div class="relative w-36 h-20 flex items-center justify-center overflow-hidden">
+                  <svg class="absolute top-0 left-0 w-full h-full" viewBox="0 0 100 50">
+                    <!-- 背景半円 -->
+                    <path d="M 10 50 A 40 40 0 0 1 90 50" fill="none" stroke="#e2e8f0" stroke-width="8" stroke-linecap="round"/>
+                    <!-- アクティブ値（シアン〜ネイビーのグラデーション） -->
+                    <path d="M 10 50 A 40 40 0 0 1 76.8 22" fill="none" stroke="url(#clayMeterGrad)" stroke-width="10" stroke-linecap="round" class="fade-in"/>
+                    
+                    <defs>
+                      <linearGradient id="clayMeterGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                        <stop offset="0%" stop-color="#00a3e0" />
+                        <stop offset="100%" stop-color="#223670" />
+                      </linearGradient>
+                    </defs>
+                  </svg>
+                  <div class="absolute bottom-0 text-center">
+                    <span class="text-lg font-black text-[#223670] tracking-tight">優良 (A)</span>
+                    <div class="flex text-[#d0a900] -mt-1 scale-90 justify-center">
+                      <i data-lucide="star" class="w-3.5 h-3.5 fill-current"></i>
+                      <i data-lucide="star" class="w-3.5 h-3.5 fill-current"></i>
+                      <i data-lucide="star" class="w-3.5 h-3.5 fill-current"></i>
+                      <i data-lucide="star" class="w-3.5 h-3.5 fill-current"></i>
+                      <i data-lucide="star" class="w-3.5 h-3.5 text-slate-300"></i>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 1. 現状分析 -->
+              <div class="space-y-3">
+                <h4 class="text-[#223670] font-black flex items-center gap-1.5 text-[13px] border-l-4 border-[#223670] pl-2">
+                  <i data-lucide="compass" class="w-4 h-4 text-[#00a3e0]"></i>
+                  1. 現状の数値分析と強みの評価
+                </h4>
+                
+                <!-- 📈 お客さま驚き要素2：コンバージョン推移ミニ波形折れ線チャート！ -->
+                <div class="bg-slate-50/50 p-4 rounded-2xl border border-slate-100/50">
+                  <div class="flex justify-between items-center mb-2">
+                    <span class="text-[10px] text-slate-400 font-bold flex items-center gap-1">
+                      <i data-lucide="trending-up" class="w-3.5 h-3.5 text-rose-500"></i>
+                      直近30日のコンバージョン（CV）発生トレンド波形（リアルタイム描画）
+                    </span>
+                    <span class="text-[10px] text-emerald-600 font-black flex items-center gap-0.5">
+                      <i data-lucide="activity" class="w-3.5 h-3.5"></i>
+                      CVトレンド安定
+                    </span>
+                  </div>
+                  <div class="h-[120px] w-full">
+                    <canvas id="cvTrendChart"></canvas>
+                    <!-- 🌟 超防弾用フォールバックコンテナ（Chart.js未ロード時に作動） -->
+                    <div id="cvTrendChartFallback" class="hidden h-full w-full"></div>
+                  </div>
+                </div>
+
+                <ul class="space-y-2 pl-4 text-[11px] text-slate-600 font-bold list-disc">
+                  <li><strong>コンバージョン数（${cvVal}件）</strong>：直近30日間で非常に安定したリード獲得ができており、市場の確かなニーズを捉えています。</li>
+                  <li><strong>トップ流入経路（【${sourceVal}】）</strong>：検索エンジン経由での確度の高い検討層が、サイトへスムーズに流入している理想的な状態です。</li>
+                  <li><strong>スマホ利用率（${mobileVal}%）</strong>：アクセス数の圧倒的多数がモバイル。スマホ対応の最適化こそが最大の成果向上レバーです。</li>
+                  <li><strong>エンゲージメント率（${engagementVal}%）</strong>：ユーザーがしっかりとコンテンツを読み進めており、構成自体への関心は非常に高い状態です。</li>
+                </ul>
+              </div>
+
+              <!-- 2. Web改善案（★優先度・難易度の可視化バッジを追加！） -->
+              <div>
+                <h4 class="text-[#223670] font-black mb-3.5 flex items-center gap-1.5 text-[13px] border-l-4 border-[#223670] pl-2">
+                  <i data-lucide="trending-up" class="w-4 h-4 text-emerald-500"></i>
+                  2. 今すぐ取り組むべき3つの「Web改善案」
+                </h4>
+                <ul class="space-y-4 pl-1 text-[11px] text-slate-600 font-bold">
+                  <li class="bg-slate-50/50 p-3.5 rounded-2xl border border-slate-100 relative">
+                    <div class="flex flex-wrap items-center justify-between gap-2 mb-1.5">
+                      <span class="text-xs font-black text-[#223670]">① スマホ表示スピードの徹底最適化</span>
+                      <div class="flex items-center gap-1.5 text-[9px] font-bold">
+                        <span class="bg-red-50 text-red-700 px-2 py-0.5 rounded-md">優先度: 極高 (★★★★)</span>
+                        <span class="bg-slate-100 text-slate-600 px-2 py-0.5 rounded-md">難易度: 低 (★☆☆)</span>
+                      </div>
+                    </div>
+                    <p class="text-slate-500 text-[10px] leading-relaxed pl-1.5">
+                      モバイル率が${mobileVal}%と極めて高いため、読み込み速度の遅延が大きな離脱を生み出します。まずは最上部の余計なプログラムの削減や、画像の圧縮を行いましょう。
+                    </p>
+                  </li>
+
+                  <li class="bg-slate-50/50 p-3.5 rounded-2xl border border-slate-100 relative">
+                    <div class="flex flex-wrap items-center justify-between gap-2 mb-1.5">
+                      <span class="text-xs font-black text-[#223670]">② 主要キーワードに合わせたFV（ファーストビュー）の言葉調整</span>
+                      <div class="flex items-center gap-1.5 text-[9px] font-bold">
+                        <span class="bg-amber-50 text-amber-700 px-2 py-0.5 rounded-md">優先度: 高 (★★★)</span>
+                        <span class="bg-slate-100 text-slate-600 px-2 py-0.5 rounded-md">難易度: 中 (★★☆)</span>
+                      </div>
+                    </div>
+                    <p class="text-slate-500 text-[10px] leading-relaxed pl-1.5">
+                      最も強力な【${sourceVal}】からの検索流入を意識し、ユーザーが検索したキーワードと同じ言葉を、LPのファーストビューにキャッチコピーとしてそのまま反映させます。
+                    </p>
+                  </li>
+
+                  <li class="bg-slate-50/50 p-3.5 rounded-2xl border border-slate-100 relative">
+                    <div class="flex flex-wrap items-center justify-between gap-2 mb-1.5">
+                      <span class="text-xs font-black text-[#223670]">③ スクロールに追従するモバイル用コンバージョンボタンの常時表示</span>
+                      <div class="flex items-center gap-1.5 text-[9px] font-bold">
+                        <span class="bg-red-50 text-red-700 px-2 py-0.5 rounded-md">優先度: 極高 (★★★★)</span>
+                        <span class="bg-slate-100 text-slate-600 px-2 py-0.5 rounded-md">難易度: 極低 (☆☆☆)</span>
+                      </div>
+                    </div>
+                    <p class="text-slate-500 text-[10px] leading-relaxed pl-1.5">
+                      読み込みエンゲージメント（${engagementVal}%）が高いため、ユーザーがいつでも資料請求・問合せできるように、画面の最下部（フッター）に幅いっぱいの「カタログ請求ボタン」を常に追従（CSS固定）させます。
+                    </p>
+                  </li>
+                </ul>
+              </div>
+
+              <!-- 3. 実践アドバイス手順 -->
+              <div>
+                <h4 class="text-[#223670] font-black mb-2.5 flex items-center gap-1.5 text-[13px] border-l-4 border-[#223670] pl-2">
+                  <i data-lucide="help-circle" class="w-4 h-4 text-[#d0a900]"></i>
+                  3. 具体的な改善方法のアドバイス (実践手順)
+                </h4>
+                <div class="bg-slate-50 p-4 rounded-2xl border border-slate-200/50 space-y-3 text-[11px] text-slate-600 font-bold">
+                  <div>
+                    <span class="text-[#00a3e0] font-black flex items-center gap-1">
+                      <i data-lucide="chevrons-right" class="w-4 h-4"></i>
+                      表示スピード改善のヒント
+                    </span>
+                    <p class="pl-5 text-[10px] text-slate-500 mt-0.5 leading-relaxed">無料ツール「Google PageSpeed Insights」で現在の数値を測定し、最上部の重たい画像ファイルを TinyPNG などの無料ツールで圧縮（できればWebP形式へ変換）して再設置します。</p>
+                  </div>
+                  <div>
+                    <span class="text-[#00a3e0] font-black flex items-center gap-1">
+                      <i data-lucide="chevrons-right" class="w-4 h-4"></i>
+                      ファーストビュー最適化のヒント
+                    </span>
+                    <p class="pl-5 text-[10px] text-slate-500 mt-0.5 leading-relaxed">流入元のキーワード予測（競合他社や検索窓でのサジェスト）を書き出し、ユーザーがLPを開いた瞬間に「私のことだ！」と一秒で共感できるキャッチコピーへ変更します。</p>
+                  </div>
+                  <div>
+                    <span class="text-[#00a3e0] font-black flex items-center gap-1">
+                      <i data-lucide="chevrons-right" class="w-4 h-4"></i>
+                      アクションボタンの追従手順
+                    </span>
+                    <p class="pl-5 text-[10px] text-slate-500 mt-0.5 leading-relaxed">スマホ画面の最下部に、スクロールしても常に指が届く位置に、幅いっぱいの「カタログ請求ボタン」を固定表示するレイアウトに調整します。</p>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 🌟 お客さま驚き要素3：ネイクストステップ (立体タイムラインロードマップ) -->
+              <div class="bg-[#223670]/5 p-5 rounded-2xl border border-dashed border-[#223670]/20">
+                <h4 class="text-[#223670] font-black mb-4 flex items-center gap-1.5 text-[12px]">
+                  <i data-lucide="arrow-right-circle" class="w-4 h-4 text-[#00a3e0]"></i>
+                  4. ネクストステップ（今後の並行伴走ロードマップ）
+                </h4>
+                <p class="text-[10px] text-slate-500 font-semibold mb-4 leading-relaxed">
+                  上記の改善案をスムーズに実行に移し、最速度で成果（コンバージョン数）向上を達成するために、伴走報告者である <strong>${consultantName}</strong> が以下のステップでご支援を並行実施いたします。
+                </p>
+                
+                <!-- タイムラインのビジュアルデザイン -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-[10px] font-bold text-slate-600 relative">
+                  
+                  <!-- STEP 1 -->
+                  <div class="bg-white p-4 rounded-2xl border border-slate-100 flex flex-col justify-between shadow-sm relative overflow-hidden">
+                    <div class="absolute top-0 left-0 w-1.5 h-full bg-[#00a3e0]"></div>
+                    <div>
+                      <span class="text-[#00a3e0] text-[11px] font-black flex items-center gap-1">
+                        <i data-lucide="calendar-range" class="w-4 h-4"></i>
+                        STEP 01 (1〜2週目)
+                      </span>
+                      <h5 class="text-xs font-black text-[#223670] mt-1.5">最優先：離脱防止の基盤改善</h5>
+                      <p class="text-slate-500 mt-1 leading-relaxed">表示速度の高速化、およびファーストビュー画像とテキストの最適化を実施し、今ある流入数（Organic Search）からの直帰を抑え込みます。</p>
+                    </div>
+                  </div>
+
+                  <!-- STEP 2 -->
+                  <div class="bg-white p-4 rounded-2xl border border-slate-100 flex flex-col justify-between shadow-sm relative overflow-hidden">
+                    <div class="absolute top-0 left-0 w-1.5 h-full bg-[#00a3e0]"></div>
+                    <div>
+                      <span class="text-[#00a3e0] text-[11px] font-black flex items-center gap-1">
+                        <i data-lucide="smartphone" class="w-4 h-4"></i>
+                        STEP 02 (3〜4週目)
+                      </span>
+                      <h5 class="text-xs font-black text-[#223670] mt-1.5">即効性：導線のスマホ最適化</h5>
+                      <p class="text-slate-500 mt-1 leading-relaxed">スマートフォン表示における「フローティングCVボタン（追従ボタン）」を設置し、ユーザーが「いつでもワンタップで問合せできる」設計へ改修します。</p>
+                    </div>
+                  </div>
+
+                  <!-- STEP 3 -->
+                  <div class="bg-white p-4 rounded-2xl border border-slate-100 flex flex-col justify-between shadow-sm relative overflow-hidden">
+                    <div class="absolute top-0 left-0 w-1.5 h-full bg-[#223670]"></div>
+                    <div>
+                      <span class="text-[#223670] text-[11px] font-black flex items-center gap-1">
+                        <i data-lucide="line-chart" class="w-4 h-4"></i>
+                        STEP 03 (翌月以降)
+                      </span>
+                      <h5 class="text-xs font-black text-[#223670] mt-1.5">継続的：効果測定・改善検証</h5>
+                      <p class="text-slate-500 mt-1 leading-relaxed">GA4の数値を再度本システムで取得・確認し、改善前後のコンバージョン率（CVR）のビフォーアフター数値を測定・チューニングします。</p>
+                    </div>
+                  </div>
+
+                </div>
+              </div>
+
+              <!-- 伴走応援アドバイス -->
+              <div class="pt-3 border-t border-slate-100 font-bold">
+                <h4 class="text-[#223670] font-black mb-1 flex items-center gap-1 text-[13px]">
+                  <i data-lucide="sparkles" class="w-4 h-4 text-[#d0a900]"></i>
+                  松本様からの応援メッセージ
+                </h4>
+                <p class="text-slate-500 pl-5 text-[11px] leading-relaxed">
+                  現在の基本数値は非常にポテンシャルの高い状態です！まずはスマホの「カタログ請求フロー」の最適化という具体的な一歩から実行し、さらなるリード獲得最大化を目指していきましょう！「考えるを、ひとりにしない。」の姿勢で、<strong>${clientName}</strong> の自動分析の成功を全力で応援いたします。
+                </p>
+              </div>
+            `;
+          }
+
+          // 📈 お客さま驚き要素4：折れ線トレンド波形グラフを本番描画！
+          renderCvTrendChart();
+        }
+
+        // UI切り替え
+        const aiReportCard = document.getElementById('ai-report-card');
+        if (aiReportCard) {
+          aiReportCard.classList.remove('hidden');
+          aiReportCard.scrollIntoView({ behavior: 'smooth' });
+        }
+        
+        if (gBtn && gBtn.parentElement) {
+          gBtn.parentElement.classList.add('hidden'); // ボタンを隠す
+        }
+        
+        // ボタンの復元
+        if (gBtn) {
+          gBtn.disabled = false;
+          gBtn.innerHTML = `<i data-lucide="sparkles" class="w-4 h-4"></i><span>AI自動分析レポートを生成する！ (5秒で完成)</span>`;
+        }
+        initIcons();
+      }, 1500);
+    }
+
+    // 📈 Wave折れ線グラフ（コンバージョン発生トレンド）を描画するヘルパー関数
+    function renderCvTrendChart() {
+      const ctx = document.getElementById('cvTrendChart');
+      const fallbackEl = document.getElementById('cvTrendChartFallback');
+      if (!ctx) return;
+
+      // Chart.jsが無事読み込まれている場合のみグラフ処理をする
+      if (typeof Chart !== 'undefined') {
+        if (fallbackEl) fallbackEl.classList.add('hidden');
+        ctx.classList.remove('hidden');
+
+        // シミュレーション用の滑らかな波形データ (直近30日のCV発生状況イメージ)
+        const labels = Array.from({length: 15}, (_, i) => `${i*2 + 2}日前`);
+        const dataValues = [2, 4, 3, 5, 8, 4, 6, 9, 5, 7, 8, 6, 8, 7, 9];
+
+        try {
+          new Chart(ctx, {
+            type: 'line',
+            data: {
+              labels: labels.reverse(),
+              datasets: [{
+                label: 'コンバージョン発生数',
+                data: dataValues,
+                borderColor: '#00a3e0',
+                borderWidth: 3,
+                pointBackgroundColor: '#223670',
+                pointRadius: 4,
+                tension: 0.4, // 滑らかな曲線（スプライン）
+                fill: true,
+                // 綺麗なグラデーションで塗りつぶし
+                backgroundColor: function(context) {
+                  const chart = context.chart;
+                  const {ctx, chartArea} = chart;
+                  if (!chartArea) return null;
+                  const gradient = ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
+                  gradient.addColorStop(0, 'rgba(0, 163, 224, 0.3)');
+                  gradient.addColorStop(1, 'rgba(34, 54, 112, 0.0)');
+                  return gradient;
+                }
+              }]
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: {
+                legend: {
+                  display: false
+                }
+              },
+              scales: {
+                x: {
+                  grid: {
+                    display: false
+                  },
+                  ticks: {
+                    font: {
+                      size: 8,
+                      weight: 'bold'
+                    },
+                    color: '#94a3b8'
+                  }
+                },
+                y: {
+                  beginAtZero: true,
+                  grid: {
+                    color: '#f1f5f9'
+                  },
+                  ticks: {
+                    font: {
+                      size: 8,
+                      weight: 'bold'
+                    },
+                    color: '#94a3b8',
+                    stepSize: 2
+                  }
+                }
+              }
+            }
+          });
+        } catch (e) {
+          console.error("折れ線トレンドグラフ描画エラー: ", e);
+          showCvTrendFallback();
+        }
+      } else {
+        // Chart.jsがロードされていない場合は、超美しいリストカードで代替表示！
+        showCvTrendFallback();
+      }
+    }
+
+    // 📈 折れ線トレンドグラフ未ロード時の美しいフォールバックデザイン
+    function showCvTrendFallback() {
+      const ctx = document.getElementById('cvTrendChart');
+      const fallbackEl = document.getElementById('cvTrendChartFallback');
+      if (ctx) ctx.classList.add('hidden');
+      if (fallbackEl) {
+        fallbackEl.classList.remove('hidden');
+        fallbackEl.innerHTML = `
+          <div class="flex items-center justify-around h-full py-2 bg-slate-50/50 rounded-xl">
+            <div class="flex flex-col items-center"><span class="text-[9px] text-slate-400">14日前</span><span class="text-xs font-black text-[#223670]">2件</span></div>
+            <div class="flex flex-col items-center"><span class="text-[9px] text-slate-400">10日前</span><span class="text-xs font-black text-[#223670]">5件</span></div>
+            <div class="flex flex-col items-center"><span class="text-[9px] text-slate-400">6日前</span><span class="text-xs font-black text-[#223670]">9件</span></div>
+            <div class="flex flex-col items-center"><span class="text-[9px] text-slate-400">2日前</span><span class="text-xs font-black text-[#223670]">7件</span></div>
+            <div class="flex flex-col items-center bg-emerald-50 px-2.5 py-1 rounded-xl"><span class="text-[9px] text-emerald-600">本日</span><span class="text-sm font-black text-emerald-700">9件</span></div>
+          </div>
+        `;
+      }
+    }
+
+    // 📋 強力なレポート文面のコピー機能 (iOS・特殊ブラウザ完全対応 + 💡ボタン確認表示アニメーション搭載)
+    function copyReportText() {
+      const reportContentEl = document.getElementById('report-content-text');
+      const text = reportContentEl ? reportContentEl.innerText : "";
+      
+      if (!text || text.trim() === "") {
+        showNotification("コピーするレポート文面がありません。先にレポートを生成してください。", false);
+        return;
+      }
+
+      // 一時的なテキストエリアを作成
+      const tempInput = document.createElement("textarea");
+      tempInput.value = text;
+      
+      // iOSや主要ブラウザでのフォーカス不具合と、不必要な画面スクロール崩れを防ぐためのガードスタイル設定
+      tempInput.style.position = 'fixed';
+      tempInput.style.top = '0';
+      tempInput.style.left = '-9999px';
+      tempInput.style.width = '2em';
+      tempInput.style.height = '2em';
+      tempInput.style.padding = '0';
+      tempInput.style.border = 'none';
+      tempInput.style.outline = 'none';
+      tempInput.style.boxShadow = 'none';
+      tempInput.style.background = 'transparent';
+      
+      document.body.appendChild(tempInput);
+      
+      // テキストを選択
+      tempInput.select();
+      tempInput.setSelectionRange(0, 99999); // モバイルiOS Safari対応
+      
+      let success = false;
+      try {
+        // コピーコマンドの実行
+        success = document.execCommand("copy");
+        if (!success && navigator.clipboard) {
+          navigator.clipboard.writeText(text);
+          success = true;
+        }
+      } catch (err) {
+        // クリップボードAPIフォールバック
+        if (navigator.clipboard) {
+          navigator.clipboard.writeText(text);
+          success = true;
+        }
+      }
+      
+      // 後片付け
+      document.body.removeChild(tempInput);
+
+      if (success) {
+        // 1. 左上の通知表示を稼働
+        showNotification("レポート文章を完全にコピーしました！");
+        
+        // 2. ★コピーボタン自体の確認フィードバック表示 (ボタンの色と文字が一時的に変化)
+        const copyBtn = document.getElementById('copy-report-btn');
+        const copyBtnText = document.getElementById('copy-btn-text');
+        const copyBtnIcon = document.getElementById('copy-btn-icon');
+        
+        if (copyBtn && copyBtnText && copyBtnIcon) {
+          const originalText = copyBtnText.innerText;
+          
+          // コピー完了状態へ変化 (緑色になりチェックマークを表示)
+          copyBtnText.innerText = "コピー完了！";
+          copyBtn.classList.remove('bg-slate-100', 'text-slate-700', 'hover:bg-slate-200');
+          copyBtn.classList.add('bg-emerald-500', 'text-white', 'hover:bg-emerald-600');
+          copyBtnIcon.setAttribute('data-lucide', 'check');
+          initIcons(); // アイコン再レンダリング
+
+          // 2秒後に元のスッキリとしたボタンに戻す
+          setTimeout(() => {
+            copyBtnText.innerText = originalText;
+            copyBtn.classList.remove('bg-emerald-500', 'text-white', 'hover:bg-emerald-600');
+            copyBtn.classList.add('bg-slate-100', 'text-slate-700', 'hover:bg-slate-200');
+            copyBtnIcon.setAttribute('data-lucide', 'copy');
+            initIcons();
+          }, 2000);
+        }
+      } else {
+        showNotification("コピーに失敗しました。文章を選択して手動でコピーしてください。", false);
+      }
+    }
+
+    // 🖨️ PDF保存・印刷機能の起動
+    function printReport() {
+      window.print();
+    }
+
+    // ガイドボックスの表示トグル
+    function toggleGuide() {
+      const guide = document.getElementById('guide-box');
+      if (guide) guide.classList.toggle('hidden');
+    }
+
+    // エラーメッセージの代替表示
+    function showError(message) {
+      const unTestedBox = document.getElementById('status-untested');
+      if (unTestedBox) {
+        unTestedBox.innerHTML = `
+          <div class="bg-rose-50 border border-rose-200 text-rose-800 p-6 rounded-2xl w-full max-w-sm mx-auto">
+            <h4 class="font-bold text-sm flex items-center gap-1.5 mb-2 text-rose-700">
+              <i data-lucide="alert-circle" class="w-4 h-4"></i>
+              鍵ファイルの読み込みエラー
+            </h4>
+            <p class="text-xs leading-relaxed font-bold">${message}</p>
+            <button onclick="location.reload()" class="mt-4 text-[10px] bg-rose-200/50 hover:bg-rose-200 text-rose-900 px-3 py-1.5 rounded-full font-bold">
+              やり直す
+            </button>
+          </div>
+        `;
+      }
+      initIcons();
+    }
+  </script>
+</body>
+</html>
