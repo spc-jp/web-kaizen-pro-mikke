@@ -139,6 +139,27 @@
       from { transform: rotate(0deg); }
       to { transform: rotate(360deg); }
     }
+
+    /* 数字が確定した瞬間、ポンっと弾む */
+    @keyframes metricPop {
+      0%   { transform: scale(1); }
+      40%  { transform: scale(1.28); color: #00a3e0; }
+      100% { transform: scale(1); }
+    }
+    .metric-pop {
+      display: inline-block;
+      animation: metricPop 0.6s ease-out;
+    }
+
+    /* データ到着時に、カードがふわっと光る */
+    @keyframes cardGlow {
+      0%   { box-shadow: 0 0 0 0 rgba(0,163,224,0); }
+      40%  { box-shadow: 0 0 24px 5px rgba(0,163,224,0.45); }
+      100% { box-shadow: 0 0 0 0 rgba(0,163,224,0); }
+    }
+    .card-glow {
+      animation: cardGlow 0.95s ease-out;
+    }
     @keyframes pulse {
       0%, 100% { opacity: 1; transform: scale(1); }
       50% { opacity: .8; transform: scale(1.003); }
@@ -348,7 +369,7 @@
         <i data-lucide="gauge" class="w-6 h-6"></i>
       </div>
       <div>
-        <h1 class="text-xl md:text-2xl font-black text-[#223670] tracking-tight">
+        <h1 onclick="scrollToTop()" title="トップへ戻る" class="text-xl md:text-2xl font-black text-[#223670] tracking-tight cursor-pointer hover:opacity-80 transition-opacity">
           Web改善Proみっけ <span class="bg-[#223670]/10 text-[#223670] text-xs px-2.5 py-0.5 rounded-full font-bold ml-1.5">PRO</span>
         </h1>
         <p class="text-[11px] text-[#00a3e0] font-bold tracking-wide mt-0.5">
@@ -586,6 +607,14 @@
           <div id="report-content-text" class="space-y-6 text-xs font-bold text-slate-700 leading-relaxed">
             <!-- JSで動的に、または本物のAIレスポンスがここに挿入されます -->
           </div>
+
+          <!-- 最初に戻るボタン（レポート下段） -->
+          <div class="mt-8 pt-5 border-t border-slate-100 text-center no-print">
+            <button onclick="scrollToTop()" class="inline-flex items-center gap-1.5 px-6 py-3 rounded-2xl font-black text-xs text-white bg-gradient-to-r from-[#223670] to-[#00a3e0] hover:opacity-90 active:scale-[0.98] transition-all shadow-md">
+              <i data-lucide="arrow-up-circle" class="w-4 h-4"></i>
+              最初に戻る
+            </button>
+          </div>
         </div>
 
       </div>
@@ -613,6 +642,64 @@
       else if (diff < 0) { arrow = "↓"; color = "text-rose-500"; }
       const sign = diff > 0 ? "+" : "";
       return `<span class="${color}">先月${p}${unit} → ${sign}${diff}${unit} ${arrow}</span>`;
+    }
+
+    // ⬆️ ページ最上部へスムーズに戻る（ヘッダーロゴ／最初に戻るボタン共通）
+    function scrollToTop() {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    // 🎉 数字を0から目標値へ駆け上がらせる（驚きのカウントアップ演出）
+    function animateNumber(id, target, opts) {
+      const el = document.getElementById(id);
+      if (!el) return;
+      opts = opts || {};
+      const decimals = opts.decimals || 0;
+      const duration = opts.duration || 1200;
+      const delay = opts.delay || 0;
+
+      const run = () => {
+        const t = Number(target) || 0;
+        const startTime = performance.now();
+        const easeOut = (x) => 1 - Math.pow(1 - x, 3);
+        function frame(now) {
+          let p = Math.min((now - startTime) / duration, 1);
+          const val = t * easeOut(p);
+          el.innerText = decimals > 0 ? val.toFixed(decimals) : Math.round(val).toString();
+          if (p < 1) {
+            requestAnimationFrame(frame);
+          } else {
+            el.innerText = decimals > 0 ? t.toFixed(decimals) : Math.round(t).toString();
+            // 数字が確定した瞬間、ポンっと弾んで、カードがふわっと光る
+            el.classList.remove('metric-pop');
+            void el.offsetWidth; // アニメを再生し直すためのリセット
+            el.classList.add('metric-pop');
+            const card = el.closest('.clay-card') || el.parentElement;
+            if (card) {
+              card.classList.remove('card-glow');
+              void card.offsetWidth;
+              card.classList.add('card-glow');
+            }
+          }
+        }
+        requestAnimationFrame(frame);
+      };
+      if (delay > 0) setTimeout(run, delay); else run();
+    }
+
+    // 🎬 指標をまとめて演出つきで更新（数字はカウントアップ、流入元はフェード）
+    function animateMetrics(data) {
+      const src = document.getElementById('metric-source');
+      if (src) {
+        src.style.opacity = 0;
+        src.innerText = data.topSource || "なし";
+        setTimeout(() => { src.style.transition = 'opacity .6s ease'; src.style.opacity = 1; }, 200);
+      }
+      animateNumber('metric-cv', data.cv, { decimals: 0, delay: 0 });
+      animateNumber('metric-mobile', data.mobileRatio, { decimals: 1, delay: 300 });
+      safeSetText('metric-engagement', String(data.engagementRate != null ? data.engagementRate : 68.2));
+      // 前月比は、数字が出そろってから表示
+      setTimeout(updateDeltas, 1500);
     }
 
     // 📊 ダッシュボードのカードに前月比を反映
@@ -1103,20 +1190,21 @@
           const resultData = await response.json();
           fetchedDataCache = resultData; // 取得データを保持
 
-          // UI表示を本物のデータに書き換える
-          safeSetText('metric-cv', resultData.cv || 0);
-          safeSetText('metric-source', resultData.topSource || "なし");
-          safeSetText('metric-mobile', resultData.mobileRatio || 0.0);
-          safeSetText('metric-engagement', resultData.engagementRate || 0.0);
-
-          // 前月比データをセットしてカードに反映
+          // 前月比データをセット
           const prev = resultData.prev || {};
           prevData = {
             cv: prev.cv != null ? prev.cv : 0,
             mobile: prev.mobileRatio != null ? prev.mobileRatio : 0,
             engagement: prev.engagementRate != null ? prev.engagementRate : 0
           };
-          updateDeltas();
+
+          // 🎉 本物のデータを、驚きのカウントアップ演出で表示！
+          animateMetrics({
+            cv: resultData.cv || 0,
+            topSource: resultData.topSource || "なし",
+            mobileRatio: resultData.mobileRatio || 0,
+            engagementRate: resultData.engagementRate || 0
+          });
 
           // 本物の数値に基づいて円グラフをアニメーション更新！
           updateDeviceChart(resultData.mobileRatio || 76.8);
@@ -1140,15 +1228,11 @@
         safeSetText('loading-subtitle', "暗号キー（JWT署名）を解析し、GA4との安全な通信経路を構築しています。");
         fetchedDataCache = null; // デモモード
 
-        // 標準数値にリセット
-        safeSetText('metric-cv', "84");
-        safeSetText('metric-source', "Organic Search");
-        safeSetText('metric-mobile', "76.8");
-        safeSetText('metric-engagement', "68.2");
-
-        // デモ用の前月データをセットして前月比を表示
+        // デモ用の前月データをセット
         prevData = { cv: 72, mobile: 74.2, engagement: 65.0 };
-        updateDeltas();
+
+        // 🎉 標準数値を、驚きのカウントアップ演出で表示！
+        animateMetrics({ cv: 84, topSource: "Organic Search", mobileRatio: 76.8, engagementRate: 68.2 });
 
         // シミュレーション円グラフ描画
         updateDeviceChart(76.8);
