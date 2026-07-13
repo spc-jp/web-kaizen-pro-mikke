@@ -251,7 +251,7 @@
 
       <div class="space-y-5 text-xs font-bold text-slate-600 leading-relaxed">
 
-        <!-- ★ お客様を選ぶ（顧客切り替え・自動セット） -->
+        <!-- ★ お客様の管理（登録・記憶・切り替え・削除） -->
         <div>
           <label class="block text-xs font-black text-slate-600 mb-2 flex items-center gap-1">
             <span class="bg-[#00a3e0]/10 text-[#00a3e0] text-[10px] px-1.5 py-0.5 rounded-md font-bold">★</span>
@@ -260,8 +260,19 @@
           <select id="customer-select" onchange="applyCustomer()" class="w-full p-3.5 clay-input text-xs font-bold text-[#223670]">
             <option value="">-- 手動で入力 --</option>
           </select>
-          <p class="text-[10px] text-slate-400 font-semibold mt-1 leading-relaxed pl-1">
-            ※選ぶだけで、下の①企業名と③プロパティIDが自動で切り替わります。お客様が増えたら、コード内の「お客様リスト」に1行追記するだけです。
+
+          <!-- 登録済みお客様の一覧（削除ボタンつき） -->
+          <div id="customer-list" class="mt-2 space-y-1"></div>
+
+          <!-- お客様を追加 -->
+          <div class="mt-3 p-3 rounded-xl bg-slate-50 border border-slate-200">
+            <p class="text-[10px] font-black text-slate-500 mb-2">お客様を追加（この端末に記憶されます）</p>
+            <input type="text" id="new-customer-name" placeholder="企業名（例: 株式会社サンプル）" class="w-full p-2.5 mb-2 clay-input text-[11px] font-bold text-[#223670]" />
+            <input type="text" id="new-customer-propid" placeholder="プロパティID（数字・コピー推奨）" class="w-full p-2.5 mb-2 clay-input text-[11px] font-bold text-[#223670]" />
+            <button onclick="addCustomer()" class="w-full py-2.5 rounded-xl text-[11px] font-black text-white bg-gradient-to-r from-[#223670] to-[#00a3e0] hover:opacity-90 active:scale-[0.98] transition-all">＋ お客様を登録</button>
+          </div>
+          <p class="text-[10px] text-slate-400 font-semibold mt-1.5 leading-relaxed pl-1">
+            ※登録すると上のプルダウンに並び、次回もこの端末に残ります。大切なIDはメモ帳にも控えておくと安心です。
           </p>
         </div>
 
@@ -731,7 +742,12 @@
     function renderMonthlyReport(rawText) {
       const text = (rawText || "").trim();
       const iconFor = (title) => {
-        if (title.includes("結論")) return "flag";
+        if (title.includes("まとめ") || title.includes("結論")) return "flag";
+        if (title.includes("問い合わせ") || title.includes("売上")) return "trending-up";
+        if (title.includes("記事") || title.includes("読ま")) return "book-open";
+        if (title.includes("どこから") || title.includes("来て")) return "users";
+        if (title.includes("帰") || title.includes("直帰")) return "clock";
+        if (title.includes("スマホ") || title.includes("モバイル")) return "smartphone";
         if (title.includes("数字") || title.includes("変化")) return "bar-chart-3";
         if (title.includes("一手") || title.includes("提案")) return "target";
         if (title.includes("松本") || title.includes("応援")) return "sparkles";
@@ -926,7 +942,8 @@
 
     // 読み込みが完了してから初期化
     window.addEventListener('DOMContentLoaded', () => {
-      // 0. お客様プルダウンを生成
+      // 0. お客様リストを記憶から読み込み、プルダウンを生成
+      loadCustomers();
       populateCustomerSelect();
 
       // 1. ローカルストレージから前回設定をロード (おもてなし機能)
@@ -960,12 +977,34 @@
       initIcons();
     }
 
-    // 👥 お客様リスト（増やすときは、下の { } 行を「,」で区切って追記するだけ）
-    // ※プロパティIDは、必ずGA4「プロパティの詳細」のコピーマークから正確に貼ってください
-    const CUSTOMERS = [
+    // 👥 お客様リスト（この端末に記憶。初回はデフォルト3社を登録）
+    const DEFAULT_CUSTOMERS = [
       { name: "みっけカタログ LP", propId: "542032994" },
       { name: "MJS", propId: "364041081" },
+      { name: "SPC｜公式サイト", propId: "506713976" },
     ];
+    let CUSTOMERS = [];
+
+    // 記憶からお客様リストを読み込む（無ければデフォルトを登録）
+    function loadCustomers() {
+      try {
+        const raw = safeStorageGet('mikke_customers');
+        if (raw) {
+          CUSTOMERS = JSON.parse(raw);
+          if (!Array.isArray(CUSTOMERS)) CUSTOMERS = [];
+        } else {
+          CUSTOMERS = DEFAULT_CUSTOMERS.slice();
+          saveCustomers();
+        }
+      } catch (e) {
+        CUSTOMERS = DEFAULT_CUSTOMERS.slice();
+      }
+    }
+
+    // お客様リストを記憶に保存
+    function saveCustomers() {
+      safeStorageSet('mikke_customers', JSON.stringify(CUSTOMERS));
+    }
 
     // プルダウンにお客様を並べる
     function populateCustomerSelect() {
@@ -977,6 +1016,27 @@
         opt.value = String(i);
         opt.textContent = c.name;
         sel.appendChild(opt);
+      });
+      renderCustomerList();
+    }
+
+    // 登録済みお客様の一覧（削除ボタンつき）を描画
+    function renderCustomerList() {
+      const box = document.getElementById('customer-list');
+      if (!box) return;
+      box.innerHTML = "";
+      if (CUSTOMERS.length === 0) {
+        box.innerHTML = '<p class="text-[10px] text-slate-400 font-bold pl-1">登録されたお客様はまだありません。</p>';
+        return;
+      }
+      CUSTOMERS.forEach((c, i) => {
+        const row = document.createElement('div');
+        row.className = "flex items-center justify-between gap-2 px-3 py-2 rounded-lg bg-white border border-slate-200";
+        row.innerHTML =
+          '<span class="text-[11px] font-black text-[#223670] truncate">' + c.name +
+          ' <span class="text-slate-400 font-bold">(' + c.propId + ')</span></span>' +
+          '<button onclick="deleteCustomer(' + i + ')" class="text-[10px] text-rose-500 font-black hover:text-rose-700 flex-shrink-0">削除</button>';
+        box.appendChild(row);
       });
     }
 
@@ -992,6 +1052,40 @@
       if (typeof showNotification === 'function') {
         showNotification(`${c.name} の設定に切り替えました`, true);
       }
+    }
+
+    // お客様を新規登録（記憶に保存）
+    function addCustomer() {
+      const nameEl = document.getElementById('new-customer-name');
+      const idEl = document.getElementById('new-customer-propid');
+      const name = (nameEl && nameEl.value || "").trim();
+      const propId = (idEl && idEl.value || "").trim();
+
+      if (!name || !propId) {
+        showNotification("企業名とプロパティIDの両方を入力してください", false);
+        return;
+      }
+      if (!/^\d{6,12}$/.test(propId)) {
+        showNotification("プロパティIDは数字（6〜12桁）で入力してください", false);
+        return;
+      }
+      CUSTOMERS.push({ name, propId });
+      saveCustomers();
+      populateCustomerSelect();
+      if (nameEl) nameEl.value = "";
+      if (idEl) idEl.value = "";
+      showNotification(`${name} を登録しました`, true);
+    }
+
+    // お客様を削除（記憶から消す）
+    function deleteCustomer(index) {
+      const c = CUSTOMERS[index];
+      if (!c) return;
+      if (!confirm(`「${c.name}」を削除しますか？`)) return;
+      CUSTOMERS.splice(index, 1);
+      saveCustomers();
+      populateCustomerSelect();
+      showNotification(`${c.name} を削除しました`, true);
     }
 
     // ⚙️ 環境設定モーダルの表示・非表示トグル
