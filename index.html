@@ -250,7 +250,21 @@
       </h3>
 
       <div class="space-y-5 text-xs font-bold text-slate-600 leading-relaxed">
-        
+
+        <!-- ★ お客様を選ぶ（顧客切り替え・自動セット） -->
+        <div>
+          <label class="block text-xs font-black text-slate-600 mb-2 flex items-center gap-1">
+            <span class="bg-[#00a3e0]/10 text-[#00a3e0] text-[10px] px-1.5 py-0.5 rounded-md font-bold">★</span>
+            お客様を選ぶ（企業名・IDを自動セット）
+          </label>
+          <select id="customer-select" onchange="applyCustomer()" class="w-full p-3.5 clay-input text-xs font-bold text-[#223670]">
+            <option value="">-- 手動で入力 --</option>
+          </select>
+          <p class="text-[10px] text-slate-400 font-semibold mt-1 leading-relaxed pl-1">
+            ※選ぶだけで、下の①企業名と③プロパティIDが自動で切り替わります。お客様が増えたら、コード内の「お客様リスト」に1行追記するだけです。
+          </p>
+        </div>
+
         <!-- ① クライアント企業名 -->
         <div>
           <label class="block text-xs font-black text-slate-600 mb-2 flex items-center gap-1">
@@ -912,6 +926,9 @@
 
     // 読み込みが完了してから初期化
     window.addEventListener('DOMContentLoaded', () => {
+      // 0. お客様プルダウンを生成
+      populateCustomerSelect();
+
       // 1. ローカルストレージから前回設定をロード (おもてなし機能)
       loadSettingsFromStorage();
       
@@ -941,6 +958,40 @@
       const modal = document.getElementById('usage-modal');
       if (modal) modal.classList.toggle('hidden');
       initIcons();
+    }
+
+    // 👥 お客様リスト（増やすときは、下の { } 行を「,」で区切って追記するだけ）
+    // ※プロパティIDは、必ずGA4「プロパティの詳細」のコピーマークから正確に貼ってください
+    const CUSTOMERS = [
+      { name: "みっけカタログ LP", propId: "542032994" },
+      { name: "MJS", propId: "364041081" },
+    ];
+
+    // プルダウンにお客様を並べる
+    function populateCustomerSelect() {
+      const sel = document.getElementById('customer-select');
+      if (!sel) return;
+      sel.length = 1; // 先頭の「-- 手動で入力 --」だけ残して作り直し
+      CUSTOMERS.forEach((c, i) => {
+        const opt = document.createElement('option');
+        opt.value = String(i);
+        opt.textContent = c.name;
+        sel.appendChild(opt);
+      });
+    }
+
+    // プルダウンで選んだお客様を、企業名とプロパティIDに自動反映
+    function applyCustomer() {
+      const sel = document.getElementById('customer-select');
+      if (!sel || sel.value === "") return;
+      const c = CUSTOMERS[Number(sel.value)];
+      if (!c) return;
+      safeSetValue('client-name-input', c.name);
+      safeSetValue('prop-id-input', c.propId);
+      saveSettingsToStorage();
+      if (typeof showNotification === 'function') {
+        showNotification(`${c.name} の設定に切り替えました`, true);
+      }
     }
 
     // ⚙️ 環境設定モーダルの表示・非表示トグル
